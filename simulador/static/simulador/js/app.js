@@ -1,0 +1,551 @@
+/* =====================================================================
+   app.js · Interfaz de Aire Claro para público general
+   ---------------------------------------------------------------------
+   Recorrido de los datos (detalle en DOCUMENTACION_FLUJO_DE_DATOS.md):
+
+     1. Django incrusta el catálogo de variables en la página (json_script).
+     2. El usuario agrega datos y los ajusta con una barra deslizante.
+     3. Cada movimiento programa un cálculo (espera 250 ms a que se detenga).
+     4. calcular() envía los pares [variable : valor] con fetch() a /api/predecir/.
+     5. El servidor imputa lo que falta, predice y calcula SHAP.
+     6. Se repinta: cielo de la ciudad, escala de caras, recomendaciones y
+        el «tira y afloja» de factores que ensucian o limpian el aire.
+
+   Regla de diseño: el público solo ve caras, iconos y frases cortas.
+   Las cifras quedan detrás del interruptor «Modo técnico».
+   ===================================================================== */
+(function () {
+  "use strict";
+
+  /* -----------------------------------------------------------------
+     PASO 0 · Utilidades
+     ----------------------------------------------------------------- */
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const { fmt, fmtSigno } = window.Graficos;
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // "12,5" o "12.5" → 12.5 ; "" → null ; texto → NaN
+  function aNumero(txt) {
+    const s = String(txt ?? "").trim().replace(/\s/g, "");
+    if (s === "") return null;
+    const n = s.includes(",") && s.includes(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(",", ".");
+    return /^\d*\.?\d+$/.test(n) ? Number(n) : NaN;
+  }
+  const decimales = (v) => (v.max < 5 ? 2 : v.max < 100 ? 1 : 0);
+  const memoria = {
+    leer(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    guardar(k, v) { try { localStorage.setItem(k, v); } catch { /* sin persistencia */ } },
+  };
+
+  /* -----------------------------------------------------------------
+     PASO 1 · Estado
+     ----------------------------------------------------------------- */
+  const CATALOGO = JSON.parse($("#catalogo-variables").textContent); // ya viene ordenado por importancia
+  const CONFIG = JSON.parse($("#config-front").textContent);
+  const PORID = Object.fromEntries(CATALOGO.map((v) => [v.id, v]));
+  const CSRF = $('meta[name="csrf-token"]').content;
+  const COLOR_NIVEL = ["#0ca30c", "#f2b005", "#ec835a", "#d03b3b", "#7d3c98"];
+  const CARAS = [["😊", "Limpio"], ["🙂", "Aceptable"], ["😐", "Regular"], ["😷", "Contaminado"], ["🚨", "Peligroso"]];
+
+  const estado = {
+    filas: new Map(),      // id de variable → <li>
+    resultado: null,       // última respuesta del servidor
+    peticion: null,        // AbortController de la petición en curso
+    temporizador: null,
+    objetivoTec: "pm2_5",  // pestaña del modo técnico
+    benchmark: null,
+    escena: null,
+  };
+
+  /* -----------------------------------------------------------------
+     PASO 2 · Navegación, menú y modo técnico
+     ----------------------------------------------------------------- */
+  const app = $("#app");
+  if (memoria.leer("aire.colapsado") === "1") app.classList.add("colapsado");
+  $("#btn-colapsar").addEventListener("click", () => {
+    const col = app.classList.toggle("colapsado");
+    $("#btn-colapsar").setAttribute("aria-expanded", String(!col));
+    memoria.guardar("aire.colapsado", col ? "1" : "0");
+  });
+  const menuMovil = (abrir) => {
+    app.classList.toggle("menu-abierto", abrir);
+    $("#velo").hidden = !abrir;
+    $("#btn-menu-movil").setAttribute("aria-expanded", String(abrir));
+  };
+  $("#btn-menu-movil").addEventListener("click", () => menuMovil(true));
+  $("#velo").addEventListener("click", () => menuMovil(false));
+  document.addEventListener("keydown", (e) => e.key === "Escape" && menuMovil(false));
+
+  // Modo técnico: muestra cifras y gráficos SHAP para evaluadores
+  const chkTec = $("#chk-tecnico");
+  chkTec.checked = memoria.leer("aire.tecnico") === "1";
+  document.body.classList.toggle("modo-tecnico", chkTec.checked);
+  chkTec.addEventListener("change", () => {
+    document.body.classList.toggle("modo-tecnico", chkTec.checked);
+    memoria.guardar("aire.tecnico", chkTec.checked ? "1" : "0");
+    repintarTodo();
+  });
+
+  function mostrarVista() {
+    const pedida = (location.hash || "#simulador").slice(1);
+    const vista = ["simulador", "explicabilidad", "modelos"].includes(pedida) ? pedida : "simulador";
+    $$(".vista").forEach((s) => (s.hidden = s.id !== "vista-" + vista));
+    $$(".nav-item").forEach((a) => {
+      a.classList.toggle("activo", a.dataset.vista === vista);
+      a.toggleAttribute("aria-current", a.dataset.vista === vista);
+    });
+    const sec = $("#vista-" + vista);
+    $("#titulo-vista").textContent = sec.dataset.titulo;
+    $("#subtitulo-vista").textContent = sec.dataset.sub;
+    document.title = `${sec.dataset.titulo} · Aire Claro`;
+    menuMovil(false);
+    if (vista === "explicabilidad") pintarPorque();
+    if (vista === "modelos") cargarBenchmark();
+    window.scrollTo({ top: 0 });
+  }
+  window.addEventListener("hashchange", mostrarVista);
+
+  function mostrarAviso(msg) { const a = $("#aviso-global"); a.textContent = msg || ""; a.hidden = !msg; }
+
+  /* -----------------------------------------------------------------
+     PASO 3 · Constructor dinámico con barras deslizantes
+     -----------------------------------------------------------------
+     El <select> solo ofrece variables del dataset que aún no se han
+     agregado. Cada variable agregada es una fila con barra + número.
+     ----------------------------------------------------------------- */
+  const selector = $("#selector-variable");
+  const lista = $("#lista-variables");
+
+  function poblarSelector() {
+    const libres = CATALOGO.filter((v) => !estado.filas.has(v.id));
+    selector.innerHTML = libres.length
+      ? libres.map((v) => `<option value="${v.id}">${v.simple_icono}  ${esc(v.simple_nombre)}${v.estrellas === 3 ? "  ★" : ""}</option>`).join("")
+      : `<option value="">Ya agregaste todos los datos</option>`;
+    selector.disabled = $("#btn-agregar").disabled = !libres.length;
+    $("#btn-limpiar").hidden = estado.filas.size === 0;
+  }
+
+  // Valor máximo de la barra: 1,5 veces el máximo histórico, redondeado
+  function maximoBarra(v) {
+    const m = v.max * 1.5, p = Math.pow(10, Math.floor(Math.log10(m)));
+    return Math.ceil(m / p) * p;
+  }
+  // Texto y color del estado de un valor (misma regla que el servidor)
+  function estadoDe(v, x) {
+    if (v.umbral_seguro != null && x > v.umbral_seguro) return ["Por encima de lo saludable", "var(--n3)"];
+    if (x > v.p90) return ["Más alto de lo normal", "var(--n1)"];
+    if (x < v.p10) return ["Más bajo de lo normal", "var(--n0)"];
+    return ["Normal en la ciudad", "var(--n0)"];
+  }
+  // Pista de color: verde hasta lo normal, ámbar si es alto, rojo si no es saludable
+  function pistaColor(v, max) {
+    const pct = (x) => Math.min(100, (x / max) * 100).toFixed(1) + "%";
+    const verde = "#9bd8a4", ambar = "#f9d77e", rojo = "#f2a1a1";
+    const u = v.umbral_seguro;
+    if (u != null && u <= v.p90)
+      return `linear-gradient(90deg, ${verde} 0 ${pct(u)}, ${rojo} ${pct(u)} 100%)`;
+    if (u != null)
+      return `linear-gradient(90deg, ${verde} 0 ${pct(v.p90)}, ${ambar} ${pct(v.p90)} ${pct(u)}, ${rojo} ${pct(u)} 100%)`;
+    return `linear-gradient(90deg, ${verde} 0 ${pct(v.p90)}, ${ambar} ${pct(v.p90)} 100%)`;
+  }
+
+  function agregarVariable(id, valor) {
+    const v = PORID[id];
+    if (!v || estado.filas.has(id)) return;
+    const max = maximoBarra(v), d = decimales(v);
+    const inicial = valor ?? v.mediana;
+    const paso = d === 2 ? 0.01 : d === 1 ? 0.1 : 1;
+    const li = document.createElement("li");
+    li.className = "dato";
+    li.dataset.variable = id;
+    li.innerHTML = `
+      <div class="dato__cab">
+        <span class="dato__ico" aria-hidden="true">${v.simple_icono}</span>
+        <span class="dato__nombre">${esc(v.simple_nombre)}<small>${esc(v.etiqueta)} · ${esc(v.unidad)}</small></span>
+        <button type="button" class="dato__info" aria-label="¿Qué es ${esc(v.simple_nombre)}?" aria-expanded="false">?</button>
+        <button type="button" class="dato__quitar" aria-label="Quitar ${esc(v.simple_nombre)}">✕</button>
+      </div>
+      <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
+      <div class="dato__control">
+        <input type="range" class="deslizador" min="0" max="${max}" step="${paso}" value="${Math.min(inicial, max)}"
+               aria-label="Valor de ${esc(v.simple_nombre)}" style="--pista:${pistaColor(v, max)}">
+        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor exacto de ${esc(v.simple_nombre)}"
+               value="${fmt(inicial, d).replace(/\./g, "")}">
+      </div>
+      <div class="dato__estado"><i></i><span></span></div>`;
+
+    const barra = $(".deslizador", li), num = $(".dato__num", li);
+    const pintarEstado = (x) => {
+      const [txt, color] = estadoDe(v, x);
+      $(".dato__estado span", li).textContent = txt;
+      $(".dato__estado i", li).style.background = color;
+    };
+    pintarEstado(inicial);
+
+    // Barra → número (y cálculo en vivo)
+    barra.addEventListener("input", () => {
+      const x = Number(barra.value);
+      num.value = fmt(x, d).replace(/\./g, "");
+      num.removeAttribute("aria-invalid"); num.classList.remove("invalido");
+      pintarEstado(x);
+      programarCalculo(250);
+    });
+    // Número → barra (permite valores por encima del tope de la barra)
+    num.addEventListener("input", () => {
+      const x = aNumero(num.value);
+      const malo = x === null || Number.isNaN(x);
+      num.toggleAttribute("aria-invalid", malo);
+      num.style.borderColor = malo ? "var(--ensucia)" : "";
+      if (malo) return;
+      barra.value = Math.min(x, max);
+      pintarEstado(x);
+      programarCalculo(500);
+    });
+    $(".dato__info", li).addEventListener("click", (e) => {
+      const p = $(".dato__que", li);
+      p.hidden = !p.hidden;
+      e.currentTarget.setAttribute("aria-expanded", String(!p.hidden));
+    });
+    $(".dato__quitar", li).addEventListener("click", () => quitarVariable(id));
+
+    lista.appendChild(li);
+    estado.filas.set(id, li);
+    poblarSelector();
+    programarCalculo(0);
+  }
+
+  function quitarVariable(id) {
+    const li = estado.filas.get(id);
+    if (!li) return;
+    estado.filas.delete(id);
+    li.classList.add("saliendo");
+    setTimeout(() => li.remove(), 200);
+    poblarSelector();
+    if (estado.filas.size) programarCalculo(0); else reiniciarResultados();
+  }
+
+  function reiniciarResultados() {
+    if (estado.peticion) estado.peticion.abort();
+    estado.resultado = null;
+    $("#resultado").hidden = true;
+    $("#bienvenida").hidden = false;
+    $("#mini-estado").classList.remove("visible");
+    mostrarAviso("");
+  }
+
+  $("#btn-agregar").addEventListener("click", () => selector.value && agregarVariable(selector.value));
+  $("#btn-limpiar").addEventListener("click", () => {
+    [...estado.filas.values()].forEach((li) => li.remove());
+    estado.filas.clear();
+    poblarSelector();
+    reiniciarResultados();
+  });
+  // Ejemplos: llenan los 9 datos con valores típicos de la ciudad (P10 / mediana / P90)
+  $$("[data-escenario]").forEach((b) => b.addEventListener("click", () => {
+    [...estado.filas.values()].forEach((li) => li.remove());
+    estado.filas.clear();
+    CATALOGO.forEach((v) => agregarVariable(v.id, v[b.dataset.escenario]));
+  }));
+
+  /* -----------------------------------------------------------------
+     PASO 4 · Lectura del formulario y envío con fetch()
+     ----------------------------------------------------------------- */
+  function leerFormulario() {
+    const variables = [];
+    for (const [id, li] of estado.filas) {
+      const x = aNumero($(".dato__num", li).value);
+      if (x === null || Number.isNaN(x)) return null; // el campo ya quedó marcado en rojo
+      variables.push({ variable: id, valor: x });
+    }
+    return variables.length ? { variables } : null;
+  }
+
+  function programarCalculo(espera) {
+    clearTimeout(estado.temporizador);
+    estado.temporizador = setTimeout(calcular, espera);
+  }
+
+  async function calcular() {
+    const payload = leerFormulario();
+    if (!payload) return;
+    if (estado.peticion) estado.peticion.abort(); // una respuesta vieja nunca pisa a una nueva
+    const control = new AbortController();
+    estado.peticion = control;
+    try {
+      const r = await fetch(CONFIG.api.predecir, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify(payload),
+        signal: control.signal,
+        credentials: "same-origin",
+      });
+      let datos;
+      try { datos = await r.json(); } catch { datos = { ok: false, error: "El servidor no respondió bien." }; }
+      if (!r.ok || !datos.ok) { mostrarAviso(datos.error || "No pudimos calcular. Intenta de nuevo."); return; }
+      mostrarAviso("");
+      estado.resultado = datos;
+      pintarResultado(datos);
+      if (!$("#vista-explicabilidad").hidden) pintarPorque();
+    } catch (e) {
+      if (e.name !== "AbortError") mostrarAviso("Sin conexión con el servidor. ¿Está encendido Django?");
+    } finally {
+      if (estado.peticion === control) estado.peticion = null;
+    }
+  }
+
+  /* -----------------------------------------------------------------
+     PASO 5 · Mi aire: cielo, escala, precisión, porqué y consejos
+     ----------------------------------------------------------------- */
+  function pintarResultado(d) {
+    const a = d.alerta;
+    $("#bienvenida").hidden = true;
+    $("#resultado").hidden = false;
+
+    // 5.1 El cielo de la ciudad cambia con el nivel
+    if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
+    estado.escena.actualizar(a.orden);
+    const ver = $("#veredicto");
+    const clave = a.titulo + a.cara;
+    if (ver.dataset.clave !== clave) { // solo «rebota» la cara si cambió el nivel
+      ver.dataset.clave = clave;
+      ver.innerHTML = `<span class="veredicto__cara" aria-hidden="true">${a.cara}</span>
+        <span><span class="veredicto__titulo">${esc(a.titulo)}</span><br><span class="veredicto__frase">${esc(a.frase)}</span></span>`;
+    }
+
+    // 5.2 Escala de cinco caras (color + cara + palabra)
+    $("#escala").innerHTML = CARAS.map(([cara, txt], i) => `
+      <div class="escalon ${i === a.orden ? "activo" : ""}" style="color:${COLOR_NIVEL[i]}" ${i === a.orden ? 'aria-current="true"' : ""}>
+        <span class="escalon__cara" aria-hidden="true">${cara}</span>
+        <span class="escalon__txt" style="color:var(--tinta)">${txt}</span>
+        <span class="escalon__barra" style="background:${COLOR_NIVEL[i]}"></span>
+      </div>`).join("");
+
+    $("#alerta-local").hidden = !a.dia_critico_local;
+    $("#alerta-local").textContent = "⚠ Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.";
+
+    // 5.3 Precisión: puntos + sugerencia del dato más útil que falta
+    const faltante = CATALOGO.find((v) => !estado.filas.has(v.id));
+    const pts = d.cobertura.puntos;
+    $("#precision").innerHTML = `<h3>Precisión</h3>
+      <div class="precision__puntos" aria-label="${pts} de 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= pts ? "lleno" : ""}"></i>`).join("")}</div>
+      <span class="suave">${pts >= 4 ? "¡Muy bien! Tienes casi todos los datos importantes." : "Agrega más datos para afinar el resultado."}</span>
+      ${faltante && pts < 5 ? `<button type="button" class="sugerencia" data-id="${faltante.id}">➕ Agregar ${faltante.simple_icono} ${esc(faltante.simple_nombre)}</button>` : ""}`;
+    const sug = $(".sugerencia", $("#precision"));
+    if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
+
+    // 5.4 Avance del «¿por qué?»: lo que más ensucia y lo que más ayuda
+    const s = d.explicacion[a.contaminante].simple;
+    const fila = (f, tipo) => f ? `<div class="porque-mini__fila"><b aria-hidden="true">${f.icono}</b>
+        <span><strong>${esc(f.nombre)}</strong> ${tipo === "e" ? "<span style='color:var(--ensucia)'>ensucia ▲</span>" : "<span style='color:var(--limpia)'>limpia ▼</span>"}</span></div>` : "";
+    $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.empeoran[0], "e")}${fila(s.ayudan[0], "a")}
+      ${!s.empeoran.length && !s.ayudan.length ? `<p class="suave">Todo está dentro de lo normal.</p>` : ""}
+      <span class="ver-mas">Ver la explicación →</span>`;
+
+    // 5.5 Consejos para hoy (máximo seis palabras cada uno)
+    const SELLO = { si: "✓", precaucion: "!", no: "✕" };
+    $("#recomendaciones").innerHTML = d.recomendaciones.map((r) => `
+      <div class="rec rec--${r.estado}" title="${esc(r.texto)}">
+        <span class="rec__sello" aria-label="${r.estado === "si" ? "Sí" : r.estado === "no" ? "No" : "Con cuidado"}">${SELLO[r.estado]}</span>
+        <div class="rec__ico" aria-hidden="true">${r.icono}</div>
+        <div class="rec__tit">${esc(r.etiqueta)}</div>
+        <div class="rec__txt">${esc(r.corto)}</div>
+      </div>`).join("");
+
+    // 5.6 Estado compacto para móvil
+    const mini = $("#mini-estado");
+    mini.style.background = COLOR_NIVEL[a.orden];
+    mini.style.color = a.tinta;
+    mini.innerHTML = `<span>${a.cara}</span>${esc(a.titulo)}`;
+    mini.classList.add("visible");
+
+    // 5.7 Modo técnico: las cifras reales
+    const p = d.predicciones;
+    $("#tec-simulador").innerHTML = `<h3>Detalle técnico</h3><div class="tec-cifras">
+      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>± ${fmt(p.pm2_5.error_tipico, 2)} (MAE prueba)</div>
+      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>± ${fmt(p.pm10.error_tipico, 2)} (MAE prueba)</div>
+      <div>Cobertura de importancia<b>${fmt(d.cobertura.porcentaje, 1)} %</b>PM2.5 ${fmt(d.cobertura.por_objetivo.pm2_5, 0)} % · PM10 ${fmt(d.cobertura.por_objetivo.pm10, 0)} %</div>
+      <div>Categoría ICA<b>${esc(a.categoria_ica)}</b>${esc(a.motivo)}</div></div>
+      <p class="suave">Estimadas: ${d.entrada.estimadas.map((e) => `${esc(e.etiqueta)} ≈ ${fmt(e.valor, 2)}`).join(" · ") || "ninguna"} ·
+      ${esc(d.tecnico.explicador[a.contaminante])} · ${fmt(d.tecnico.latencia_ms, 0)} ms</p>`;
+  }
+
+  /* -----------------------------------------------------------------
+     PASO 6 · ¿Por qué? — «tira y afloja» entre lo que ensucia y lo que limpia
+     ----------------------------------------------------------------- */
+  function tarjetaFactor(f, tipo) {
+    const color = tipo === "e" ? "var(--ensucia)" : "var(--limpia)";
+    const flecha = tipo === "e" ? "▲" : "▼";
+    const fuerza = [1, 2, 3].map((i) => `<span class="${i <= f.fuerza ? "" : "apagada"}">${flecha}</span>`).join("");
+    const d = f.valor < 5 ? 2 : 1;
+    return `<button type="button" class="factor ${f.origen === "estimada" ? "factor--estimada" : ""}" style="--color:${color}"
+              aria-label="${esc(f.nombre)}: ${tipo === "e" ? "ensucia" : "limpia"} el aire. Toca para saber más.">
+      <span class="factor__giro">
+        <span class="factor__cara">
+          <span class="factor__fila">
+            <span class="factor__ico" aria-hidden="true">${f.icono}</span>
+            <span><span class="factor__nombre">${esc(f.nombre)}</span><br>
+              <span class="factor__estado">${f.estado_txt ? esc(f.estado_txt[0].toUpperCase() + f.estado_txt.slice(1)) : tipo === "e" ? "Sube el riesgo" : "Baja el riesgo"}</span></span>
+            <span class="factor__fuerza" aria-hidden="true">${fuerza}</span>
+          </span>
+          ${f.origen === "estimada" ? `<span class="factor__pista">No lo diste: lo calculamos por ti</span>` : ""}
+        </span>
+        <span class="factor__dorso">
+          <b>${f.icono} ${esc(f.nombre)}</b>
+          <span>${esc(f.que_es)}</span>
+          <span class="suave">Valor usado: ${fmt(f.valor, d)} · normal: ${fmt(f.normal, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
+        </span>
+      </span></button>`;
+  }
+
+  function pintarPorque() {
+    const d = estado.resultado;
+    $("#xai-vacio").hidden = !!d;
+    $("#xai-contenido").hidden = !d;
+    if (!d) return;
+    const a = d.alerta, s = d.explicacion[a.contaminante].simple;
+
+    $("#xai-frase").textContent = s.frase;
+    // Nudo de la cuerda: se corre hacia el lado que «gana»
+    const nudo = $("#nudo");
+    nudo.textContent = a.cara;
+    nudo.style.borderColor = COLOR_NIVEL[a.orden];
+    requestAnimationFrame(() => (nudo.style.left = Math.min(92, Math.max(8, s.balance * 100)) + "%"));
+
+    $("#col-ayudan").innerHTML = s.ayudan.length ? s.ayudan.map((f) => tarjetaFactor(f, "a")).join("")
+      : `<div class="columna__vacia">Nada destacado de este lado</div>`;
+    $("#col-empeoran").innerHTML = s.empeoran.length ? s.empeoran.map((f) => tarjetaFactor(f, "e")).join("")
+      : `<div class="columna__vacia">Nada destacado de este lado</div>`;
+    $$(".factor").forEach((b) => b.addEventListener("click", () => b.classList.toggle("girada")));
+    $("#xai-nota").textContent = "Toca una tarjeta para saber qué es. Más flechas = más influencia." +
+      (s.hay_estimadas ? " Las tarjetas punteadas son datos que no diste: los calculamos por ti." : "");
+
+    // Modo técnico: SHAP por variable para PM2.5 o PM10
+    $$("#xai-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.objetivo === estado.objetivoTec)));
+    const e = d.explicacion[estado.objetivoTec];
+    const items = e.contribuciones.map((c) => ({
+      etiqueta: c.etiqueta, valor: c.aporte,
+      tooltip: [["Valor", fmt(c.valor, 3)], ["Origen", c.origen], ["Aporte", fmtSigno(c.aporte) + " µg/m³"]],
+    }));
+    items.push({ etiqueta: "Calendario", valor: e.calendario.aporte, tooltip: [["Promedio", "12 meses × 7 días"]] });
+    if (document.body.classList.contains("modo-tecnico"))
+      window.Graficos.barrasDivergentes($("#grafico-barras"), items);
+    const v = e.verificacion_aditiva;
+    $("#xai-ecuacion").innerHTML = `Base ${fmt(e.valor_base, 3)} + Σ aportes ${fmtSigno(v.base_mas_aportes - e.valor_base, 3)}
+      = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${v.ok ? "✓ aditividad SHAP" : "✗"}`;
+  }
+  $$("#xai-tabs button").forEach((b) => b.addEventListener("click", () => { estado.objetivoTec = b.dataset.objetivo; pintarPorque(); }));
+
+  /* -----------------------------------------------------------------
+     PASO 7 · ¿Es confiable? — tiro al blanco de métodos
+     ----------------------------------------------------------------- */
+  const NOMBRE_MODELO = {
+    xgboost: "XGBoost", desplegado: "XGBoost", lightgbm: "LightGBM", random_forest: "Bosque aleatorio",
+    persistencia: "Repetir lo de ayer", media_movil: "Promedio de 3 días", media_historica: "Promedio de siempre",
+  };
+  const COLOR_MODELO = {
+    xgboost: "#2a78d6", desplegado: "#2a78d6", lightgbm: "#eb6834", random_forest: "#1baf7a",
+    persistencia: "#6f6d68", media_movil: "#a8a69e", media_historica: "#cfcdc5",
+  };
+
+  async function cargarBenchmark() {
+    if (estado.benchmark) return pintarConfiable();
+    try {
+      estado.benchmark = await (await fetch(CONFIG.api.benchmark, { credentials: "same-origin" })).json();
+      pintarConfiable();
+    } catch {
+      $("#bm-contenido").innerHTML = `<div class="aviso">No se pudo cargar la comparación.</div>`;
+    }
+  }
+
+  function pintarConfiable() {
+    const b = estado.benchmark;
+    if (!b) return;
+    const clave = estado.objetivoTec;
+    const calc = b.calculado && b.calculado.objetivos[clave];
+    let modelos, elegido, mejora, estab = null, limite = true;
+
+    if (calc) {
+      const hayDesplegado = calc.modelos.some((m) => m.desplegado && m.id === "desplegado");
+      const lista = calc.modelos.filter((m) => !(hayDesplegado && m.id === "xgboost"));
+      modelos = lista.map((m) => ({
+        id: m.id, nombre: NOMBRE_MODELO[m.id] || m.nombre, mae: m.prueba.mae,
+        elegido: !!m.desplegado, color: COLOR_MODELO[m.id] || "#999", fila: m,
+      }));
+      if (!modelos.some((m) => m.elegido)) modelos.find((m) => m.id === "xgboost").elegido = true;
+      elegido = modelos.find((m) => m.elegido);
+      mejora = elegido.fila.mejora_vs_persistencia;
+      const ensambles = lista.filter((m) => m.estabilidad && m.familia !== "Referencia ingenua")
+        .sort((x, y) => x.estabilidad.desv - y.estabilidad.desv);
+      if (elegido.fila.estabilidad) estab = ensambles.findIndex((m) => m.id === elegido.id) + 1;
+      limite = elegido.fila.prueba.mae_criticos != null;
+    } else {
+      // Sin benchmark calculado: se usan los resultados oficiales de la tesis
+      const t = b.tesis.prueba;
+      modelos = [
+        { id: "xgboost", nombre: "XGBoost", mae: t[1][clave].mae, elegido: true, color: COLOR_MODELO.xgboost },
+        { id: "persistencia", nombre: "Repetir lo de ayer", mae: t[0][clave].mae, elegido: false, color: COLOR_MODELO.persistencia },
+      ];
+      elegido = modelos[0];
+      mejora = b.tesis.mejora_vs_persistencia[clave];
+    }
+
+    const medallas = ["🥇", "🥈", "🥉"];
+    const orden = [...modelos].sort((x, y) => x.mae - y.mae);
+    const tecTabla = calc ? `<div class="tarjeta tec" style="margin-top:22px">
+        <div class="segmentado" role="tablist" id="bm-tabs">
+          <button role="tab" type="button" data-objetivo="pm2_5" aria-selected="${clave === "pm2_5"}">PM2.5</button>
+          <button role="tab" type="button" data-objetivo="pm10" aria-selected="${clave === "pm10"}">PM10</button></div>
+        <table class="tabla"><thead><tr><th>Modelo</th><th class="num">MAE val.</th><th class="num">R² val.</th><th class="num">Puntaje</th>
+          <th class="num">MAE prueba</th><th class="num">RMSE prueba</th><th class="num">R² prueba</th><th class="num">MAE picos</th><th class="num">± bloques</th></tr></thead><tbody>
+        ${calc.modelos.map((m) => `<tr class="${m.desplegado ? "destacada" : ""}"><td>${esc(m.nombre)}</td>
+          <td class="num">${fmt(m.validacion.mae, 3)}</td><td class="num">${fmt(m.validacion.r2, 3)}</td>
+          <td class="num">${m.ranking ? m.ranking.total : "—"}</td>
+          <td class="num">${fmt(m.prueba.mae, 3)}</td><td class="num">${fmt(m.prueba.rmse, 3)}</td><td class="num">${fmt(m.prueba.r2, 3)}</td>
+          <td class="num">${m.prueba.mae_criticos != null ? fmt(m.prueba.mae_criticos, 3) : "—"}</td>
+          <td class="num">${m.estabilidad ? fmt(m.estabilidad.desv, 3) : "—"}</td></tr>`).join("")}
+        </tbody></table>
+        <p class="suave">${b.calculado.sustituto ? "⚠ Calculado con un sustituto de XGBoost (scikit-learn). " : ""}Tesis (prueba): XGBoost MAE ${fmt(b.tesis.prueba[1][clave].mae, 3)} · R² ${fmt(b.tesis.prueba[1][clave].r2, 3)}.
+        El escenario B (mismo día) logra R² ${fmt(b.tesis.prueba[2][clave].r2, 3)}, pero describe el presente; el objetivo es anticipar.</p></div>` : "";
+
+    $("#bm-contenido").innerHTML = `
+      <div class="rejilla-conf">
+        <div class="tarjeta diana" id="diana"></div>
+        <div>
+          <p class="frase-grande">🎯 Elegimos <b>${esc(elegido.nombre)}</b> porque es el que menos se equivoca.</p>
+          <p class="suave">Cada dardo es una forma distinta de adivinar el aire de mañana. El centro es el acierto perfecto: entre más cerca, mejor adivina.</p>
+          <ol class="podio-lista">${orden.map((m, i) => `<li class="${m.elegido ? "elegido" : ""}">
+            <span class="medalla" aria-hidden="true">${medallas[i] || "·"}</span>${esc(m.nombre)}${m.elegido ? " ⭐" : ""}
+            <span class="pin" style="background:${m.color}" aria-hidden="true"></span></li>`).join("")}</ol>
+        </div>
+      </div>
+      <div class="insignias">
+        <div class="insignia"><span class="insignia__ico">🎯</span><b>Más certero</b>
+          <span>Falla ${fmt(mejora, 0)} % menos que «repetir lo de ayer».</span></div>
+        <div class="insignia"><span class="insignia__ico">📏</span><b>Constante</b>
+          <span>${estab === 1 ? "Es el más parejo en las distintas épocas del año." : "Lo probamos en varias épocas del año y se mantuvo."}</span></div>
+        <div class="insignia"><span class="insignia__ico">⚡</span><b>Rápido y transparente</b>
+          <span>Responde al instante y te dice por qué.</span></div>
+        ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">⚠️</span><b>Su límite</b>
+          <span>Le cuesta anticipar los días más contaminados.</span></div>` : ""}
+      </div>${tecTabla}`;
+
+    window.Graficos.diana($("#diana"), modelos);
+    $$("#bm-tabs button").forEach((bt) => bt.addEventListener("click", () => { estado.objetivoTec = bt.dataset.objetivo; pintarConfiable(); }));
+  }
+
+  /* -----------------------------------------------------------------
+     PASO 8 · Arranque
+     ----------------------------------------------------------------- */
+  function repintarTodo() {
+    if (estado.resultado) { pintarResultado(estado.resultado); pintarPorque(); }
+    if (estado.benchmark && !$("#vista-modelos").hidden) pintarConfiable();
+  }
+  const pie = $("#estado-modelo");
+  $(".punto", pie).classList.add(CONFIG.listo ? "ok" : "error");
+  $("#mini-estado").addEventListener("click", () => $(".escena-tarjeta").scrollIntoView({ behavior: "smooth", block: "center" }));
+  $(".nav-item__txt", pie).textContent = CONFIG.listo ? "Modelo listo" : "Modelo no disponible";
+  if (!CONFIG.listo) mostrarAviso("La interfaz está disponible, pero las predicciones no. " + (CONFIG.error_carga || ""));
+  poblarSelector();
+  mostrarVista();
+})();

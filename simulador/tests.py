@@ -1,0 +1,206 @@
+"""
+Pruebas de la app. Son autosuficientes: entrenan modelos pequeños de
+scikit-learn en una carpeta temporal, así que no dependen de los .joblib reales.
+
+    python manage.py test simulador
+"""
+import json
+import shutil
+import tempfile
+from pathlib import Path
+
+import joblib
+from django.conf import settings
+from django.test import Client, TestCase, override_settings
+from sklearn.ensemble import GradientBoostingRegressor
+from xgboost import XGBRegressor
+
+from .ml import catalogo as cat
+from .ml.datos import cargar_y_limpiar, columnas_escenario_a, construir_features, particion_cronologica
+from .ml_service import ServicioML, nivel_ica, nombre_canonico, reiniciar_servicio
+
+URL_PREDECIR = "/api/predecir/"
+
+
+class BaseConModelos(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tmp = Path(tempfile.mkdtemp())
+        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV))
+        tr, _, _ = particion_cronologica(mat)
+        X = tr[columnas_escenario_a()]
+        for clave, conf in cat.OBJETIVOS.items():
+            m = GradientBoostingRegressor(n_estimators=25, max_depth=3, random_state=0)
+            joblib.dump(m.fit(X, tr[f"y_{clave}"]), cls.tmp / conf["archivo"])
+        cls._ajustes = override_settings(AIRE_DIR_MODELOS=cls.tmp)
+        cls._ajustes.enable()
+        reiniciar_servicio()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._ajustes.disable()
+        reiniciar_servicio()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def predecir(self, variables, client=None):
+        c = client or self.client
+        return c.post(URL_PREDECIR, data=json.dumps({"variables": variables}),
+                      content_type="application/json")
+
+
+class ModelosNativosXGBoostTests(TestCase):
+    def test_carga_json_nativo_preferido_sobre_joblib(self):
+        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV))
+        tr, _, _ = particion_cronologica(mat)
+        columnas = columnas_escenario_a()
+
+        with tempfile.TemporaryDirectory() as temp:
+            carpeta = Path(temp)
+            for clave, conf in cat.OBJETIVOS.items():
+                modelo = XGBRegressor(n_estimators=5, max_depth=2, n_jobs=1, random_state=0)
+                modelo.fit(tr[columnas], tr[f"y_{clave}"])
+                modelo.save_model(carpeta / conf["archivo"].replace(".joblib", ".json"))
+                joblib.dump("archivo joblib ignorado", carpeta / conf["archivo"])
+
+            servicio = ServicioML(carpeta, settings.AIRE_RUTA_CSV)
+
+        self.assertTrue(servicio.listo, servicio.error_carga)
+        self.assertEqual(
+            {objetivo.archivo for objetivo in servicio.objetivos.values()},
+            {"modelo_pm2_5_XGBoost.json", "modelo_pm10_XGBoost.json"},
+        )
+
+
+class PaginaYCatalogoTests(BaseConModelos):
+    def test_inicio_renderiza_constructor_y_catalogo(self):
+        r = self.client.get("/")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'id="catalogo-variables"')
+        self.assertContains(r, 'id="lista-variables"')
+        self.assertContains(r, "csrf-token")
+
+    def test_catalogo_solo_variables_del_dataset(self):
+        datos = self.client.get("/api/variables/").json()
+        ids = {v["id"] for v in datos["variables"]}
+        self.assertEqual(ids, set(cat.VARIABLES))
+        self.assertNotIn("us_aqi", ids)
+        self.assertNotIn("european_aqi", ids)
+
+
+class PrediccionTests(BaseConModelos):
+    def test_subconjunto_de_variables_y_shap_aditivo(self):
+        r = self.predecir([{"variable": "pm2_5", "valor": "21,5"},
+                           {"variable": "nitrogen_dioxide", "valor": 18}])
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertEqual(len(d["entrada"]["ingresadas"]), 2)
+        self.assertEqual(len(d["entrada"]["estimadas"]), 7)
+        for clave in ("pm2_5", "pm10"):
+            self.assertTrue(d["explicacion"][clave]["verificacion_aditiva"]["ok"])
+            self.assertEqual(len(d["explicacion"][clave]["detalle"]), 21)
+        self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
+        self.assertIn(d["alerta"]["nivel"], [n["id"] for n in cat.NIVELES])
+
+    def test_explicacion_para_publico_general(self):
+        d = self.predecir([{"variable": "pm2_5", "valor": 30}]).json()
+        a = d["alerta"]
+        for k in ("cara", "titulo", "frase"):
+            self.assertTrue(a[k])
+        s = d["explicacion"][a["contaminante"]]["simple"]
+        self.assertTrue(s["frase"].startswith("El aire"))
+        self.assertLessEqual(len(s["empeoran"]), 3)
+        self.assertLessEqual(len(s["ayudan"]), 3)
+        self.assertTrue(0 <= s["balance"] <= 1)
+        for f in s["empeoran"] + s["ayudan"]:
+            self.assertIn(f["fuerza"], (1, 2, 3))
+            self.assertNotIn("SHAP", f["nombre"])
+        self.assertIn(d["cobertura"]["puntos"], range(1, 6))
+        self.assertTrue(all(len(r["corto"].split()) <= 6 for r in d["recomendaciones"]))
+
+    def test_mas_variables_mas_cobertura(self):
+        una = self.predecir([{"variable": "pm2_5", "valor": 15}]).json()
+        todas = self.predecir([{"variable": v, "valor": cat_v, "valor_previo": cat_v}
+                               for v, cat_v in [("pm2_5", 15), ("pm10", 20),
+                                                ("carbon_monoxide", 400),
+                                                ("nitrogen_dioxide", 14),
+                                                ("sulphur_dioxide", 4), ("ozone", 55),
+                                                ("aerosol_optical_depth", 0.24),
+                                                ("dust", 0), ("uv_index", 1.8)]]).json()
+        self.assertGreater(todas["cobertura"]["porcentaje"], una["cobertura"]["porcentaje"])
+        self.assertAlmostEqual(todas["cobertura"]["porcentaje"], 100.0, places=0)
+        self.assertEqual(todas["entrada"]["estimadas"], [])
+
+    def test_lectura_actual_extrema_eleva_el_semaforo(self):
+        d = self.predecir([{"variable": "pm2_5", "valor": 80}]).json()
+        self.assertEqual(d["alerta"]["nivel"], "alto")
+        self.assertEqual(d["alerta"]["fuente"], "lectura_actual")
+        self.assertTrue(d["avisos"])
+
+    def test_errores_de_validacion(self):
+        casos = [
+            [],
+            [{"variable": "us_aqi", "valor": 50}],
+            [{"variable": "pm10", "valor": "abc"}],
+            [{"variable": "pm10", "valor": -3}],
+            [{"variable": "pm10", "valor": 10}, {"variable": "pm10", "valor": 12}],
+            [{"variable": "pm10", "valor": 99999}],
+        ]
+        for variables in casos:
+            with self.subTest(variables=variables):
+                r = self.predecir(variables)
+                self.assertEqual(r.status_code, 400)
+                self.assertFalse(r.json()["ok"])
+
+    def test_metodo_y_formato(self):
+        self.assertEqual(self.client.get(URL_PREDECIR).status_code, 405)
+        r = self.client.post(URL_PREDECIR, data="pm2_5=10",
+                             content_type="application/x-www-form-urlencoded")
+        self.assertEqual(r.status_code, 415)
+        r = self.client.post(URL_PREDECIR, data="{no json", content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+
+    def test_csrf_obligatorio(self):
+        cliente = Client(enforce_csrf_checks=True)
+        r = self.predecir([{"variable": "pm2_5", "valor": 10}], client=cliente)
+        self.assertEqual(r.status_code, 403)
+
+    def test_benchmark_incluye_resultados_tesis(self):
+        d = self.client.get("/api/benchmark/").json()
+        self.assertTrue(d["ok"])
+        self.assertEqual(d["tesis"]["particion"]["entrenamiento"], 906)
+
+
+class SinModelosTests(TestCase):
+    def test_responde_503_si_faltan_modelos(self):
+        vacia = Path(tempfile.mkdtemp())
+        try:
+            with override_settings(AIRE_DIR_MODELOS=vacia):
+                reiniciar_servicio()
+                self.assertEqual(self.client.get("/").status_code, 200)
+                r = self.client.post(URL_PREDECIR, data=json.dumps({"pm2_5": 10}),
+                                     content_type="application/json")
+                self.assertEqual(r.status_code, 503)
+        finally:
+            reiniciar_servicio()
+            shutil.rmtree(vacia, ignore_errors=True)
+
+
+class UtilidadesTests(TestCase):
+    def test_alias_de_columnas_de_colab(self):
+        self.assertEqual(nombre_canonico("NO2_lag1"), "nitrogen_dioxide_lag1")
+        self.assertEqual(nombre_canonico("pm25_ma3"), "pm2_5_ma3")
+        self.assertEqual(nombre_canonico("month"), "mes")
+        with self.assertRaises(ValueError):
+            nombre_canonico("temperatura_lag1")
+
+    def test_cortes_ica_resolucion_2254(self):
+        self.assertEqual(nivel_ica("pm2_5", 12.4)["id"], "sin_contaminacion")
+        self.assertEqual(nivel_ica("pm2_5", 12.6)["id"], "bajo")
+        self.assertEqual(nivel_ica("pm2_5", 37)["id"], "bajo")
+        self.assertEqual(nivel_ica("pm2_5", 38)["id"], "moderado")
+        self.assertEqual(nivel_ica("pm2_5", 56)["id"], "alto")
+        self.assertEqual(nivel_ica("pm2_5", 151)["id"], "critico")
+        self.assertEqual(nivel_ica("pm10", 54)["id"], "sin_contaminacion")
+        self.assertEqual(nivel_ica("pm10", 155)["id"], "moderado")
