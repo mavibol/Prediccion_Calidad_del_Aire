@@ -138,6 +138,13 @@ class PrediccionTests(BaseConModelos):
         self.assertEqual(d["alerta"]["fuente"], "lectura_actual")
         self.assertTrue(d["avisos"])
 
+    def test_acepta_valores_superiores_al_maximo_historico(self):
+        r = self.predecir([{"variable": "pm10", "valor": 99999}])
+        self.assertEqual(r.status_code, 200, r.json())
+        datos = r.json()
+        self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 99999)
+        self.assertTrue(any("menos confiable" in aviso for aviso in datos["avisos"]))
+
     def test_errores_de_validacion(self):
         casos = [
             [],
@@ -145,7 +152,6 @@ class PrediccionTests(BaseConModelos):
             [{"variable": "pm10", "valor": "abc"}],
             [{"variable": "pm10", "valor": -3}],
             [{"variable": "pm10", "valor": 10}, {"variable": "pm10", "valor": 12}],
-            [{"variable": "pm10", "valor": 99999}],
         ]
         for variables in casos:
             with self.subTest(variables=variables):

@@ -147,16 +147,10 @@ body.modo-tecnico .tec { display: block !important; }
 .dato__info, .dato__quitar { border: 0; background: var(--superficie-2); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; color: var(--tinta-2); display: grid; place-items: center; font-size: 15px; }
 .dato__quitar:hover { background: rgba(208,59,59,.12); color: var(--ensucia); }
 .dato__que { font-size: 14px; color: var(--tinta-2); margin: 8px 0 0; padding: 8px 10px; background: var(--superficie-2); border-radius: 10px; }
-.dato__control { display: grid; grid-template-columns: 1fr 86px; gap: 10px; align-items: center; margin-top: 10px; }
-.dato__num { text-align: right; min-height: 38px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+.dato__control { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 10px; }
+.dato__num { text-align: left; min-height: 42px; padding: 8px 12px; font-variant-numeric: tabular-nums; }
 .dato__estado { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin-top: 6px; color: var(--tinta-2); }
 .dato__estado i { width: 10px; height: 10px; border-radius: 50%; }
-
-/* Deslizador con zonas: verde (normal) · ámbar (alto) · rojo (no saludable) */
-input[type="range"].deslizador { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border-radius: 6px; background: var(--pista, var(--superficie-2)); cursor: pointer; }
-input[type="range"].deslizador::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 3px solid var(--tinta); box-shadow: 0 2px 6px rgba(0,0,0,.25); transition: transform .1s; }
-input[type="range"].deslizador:active::-webkit-slider-thumb { transform: scale(1.15); }
-input[type="range"].deslizador::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--tinta); }
 
 .ejemplos { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--eje); color: var(--tinta-2); font-size: 14.5px; }
 .ejemplos__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

@@ -6,7 +6,7 @@ Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, pr
 
 | Pantalla | Qué ve el usuario |
 |---|---|
-| **Mi aire** (simulador) | Agrega datos con un selector y los ajusta con barras deslizantes de colores (verde normal · ámbar alto · rojo no saludable). Todo se recalcula al instante: el cielo de una ciudad animada se aclara o se llena de bruma, una escala de 5 caras marca el nivel y aparecen 5 consejos de máximo seis palabras (ciclismo, correr, tapabocas, ventilar, niños). Un indicador de precisión sugiere el siguiente dato más útil. |
+| **Mi aire** (simulador) | Agrega datos con un selector e introduce sus valores en campos numéricos, sin un tope superior configurado. Todo se recalcula al instante: el cielo de una ciudad animada se aclara o se llena de bruma, una escala de 5 caras marca el nivel y aparecen 5 consejos de máximo seis palabras (ciclismo, correr, tapabocas, ventilar, niños). Un indicador de precisión sugiere el siguiente dato más útil. |
 | **¿Por qué?** (explicabilidad) | Una frase y un «tira y afloja»: a un lado lo que **limpia** el aire, al otro lo que lo **ensucia**, con flechas ▲▲▲ según su influencia. Las tarjetas giran al tocarlas para explicar qué es cada cosa. Sin números ni jerga. |
 | **¿Es confiable?** (comparador) | Un tiro al blanco: cada dardo es un método y el más cercano al centro es el que menos falla. Cuatro insignias explican la elección y su límite. |
 

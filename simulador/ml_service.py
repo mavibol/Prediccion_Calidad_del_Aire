@@ -329,11 +329,6 @@ class ServicioML:
                     continue  # el modelo no usa el día previo de esta variable
                 if x < 0:
                     raise ErrorValidacion(f"{etq} no puede ser negativo.")
-                st = self.stats[v]
-                if x > max(st["max"] * 10, 1.0):
-                    raise ErrorValidacion(
-                        f"{etq} = {fmt(x)} es físicamente implausible para esta ciudad "
-                        f"(máximo histórico {fmt(st['max'], 2)}).")
                 destino[v] = x
         return actual, previo, avisos
 
@@ -381,7 +376,8 @@ class ServicioML:
                 fuera.append(cat.VARIABLES[v]["etiqueta"])
         if fuera:
             avisos.append("Valores por encima del máximo histórico: "
-                          + ", ".join(fuera) + ". El modelo no extrapola.")
+                          + ", ".join(fuera)
+                          + ". La predicción puede ser menos confiable fuera del rango de entrenamiento.")
 
         predicciones, explicaciones, cobertura = {}, {}, {}
         for clave, obj in self.objetivos.items():

@@ -4,7 +4,7 @@
    Recorrido de los datos (detalle en DOCUMENTACION_FLUJO_DE_DATOS.md):
 
      1. Django incrusta el catálogo de variables en la página (json_script).
-     2. El usuario agrega datos y los ajusta con una barra deslizante.
+     2. El usuario agrega datos e introduce sus valores.
      3. Cada movimiento programa un cálculo (espera 250 ms a que se detenga).
      4. calcular() envía los pares [variable : valor] con fetch() a /api/predecir/.
      5. El servidor imputa lo que falta, predice y calcula SHAP.
@@ -109,7 +109,7 @@
   function mostrarAviso(msg) { const a = $("#aviso-global"); a.textContent = msg || ""; a.hidden = !msg; }
 
   /* -----------------------------------------------------------------
-     PASO 3 · Constructor dinámico con barras deslizantes
+     PASO 3 · Constructor dinámico de variables
      -----------------------------------------------------------------
      El <select> solo ofrece variables del dataset que aún no se han
      agregado. Cada variable agregada es una fila con barra + número.
@@ -126,11 +126,6 @@
     $("#btn-limpiar").hidden = estado.filas.size === 0;
   }
 
-  // Valor máximo de la barra: 1,5 veces el máximo histórico, redondeado
-  function maximoBarra(v) {
-    const m = v.max * 1.5, p = Math.pow(10, Math.floor(Math.log10(m)));
-    return Math.ceil(m / p) * p;
-  }
   // Texto y color del estado de un valor (misma regla que el servidor)
   function estadoDe(v, x) {
     if (v.umbral_seguro != null && x > v.umbral_seguro) return ["Por encima de lo saludable", "var(--n3)"];
@@ -138,24 +133,11 @@
     if (x < v.p10) return ["Más bajo de lo normal", "var(--n0)"];
     return ["Normal en la ciudad", "var(--n0)"];
   }
-  // Pista de color: verde hasta lo normal, ámbar si es alto, rojo si no es saludable
-  function pistaColor(v, max) {
-    const pct = (x) => Math.min(100, (x / max) * 100).toFixed(1) + "%";
-    const verde = "#9bd8a4", ambar = "#f9d77e", rojo = "#f2a1a1";
-    const u = v.umbral_seguro;
-    if (u != null && u <= v.p90)
-      return `linear-gradient(90deg, ${verde} 0 ${pct(u)}, ${rojo} ${pct(u)} 100%)`;
-    if (u != null)
-      return `linear-gradient(90deg, ${verde} 0 ${pct(v.p90)}, ${ambar} ${pct(v.p90)} ${pct(u)}, ${rojo} ${pct(u)} 100%)`;
-    return `linear-gradient(90deg, ${verde} 0 ${pct(v.p90)}, ${ambar} ${pct(v.p90)} 100%)`;
-  }
-
   function agregarVariable(id, valor) {
     const v = PORID[id];
     if (!v || estado.filas.has(id)) return;
-    const max = maximoBarra(v), d = decimales(v);
+    const d = decimales(v);
     const inicial = valor ?? v.mediana;
-    const paso = d === 2 ? 0.01 : d === 1 ? 0.1 : 1;
     const li = document.createElement("li");
     li.className = "dato";
     li.dataset.variable = id;
@@ -168,14 +150,12 @@
       </div>
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
-        <input type="range" class="deslizador" min="0" max="${max}" step="${paso}" value="${Math.min(inicial, max)}"
-               aria-label="Valor de ${esc(v.simple_nombre)}" style="--pista:${pistaColor(v, max)}">
         <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor exacto de ${esc(v.simple_nombre)}"
-               value="${fmt(inicial, d).replace(/\./g, "")}">
+               value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
 
-    const barra = $(".deslizador", li), num = $(".dato__num", li);
+    const num = $(".dato__num", li);
     const pintarEstado = (x) => {
       const [txt, color] = estadoDe(v, x);
       $(".dato__estado span", li).textContent = txt;
@@ -183,22 +163,12 @@
     };
     pintarEstado(inicial);
 
-    // Barra → número (y cálculo en vivo)
-    barra.addEventListener("input", () => {
-      const x = Number(barra.value);
-      num.value = fmt(x, d).replace(/\./g, "");
-      num.removeAttribute("aria-invalid"); num.classList.remove("invalido");
-      pintarEstado(x);
-      programarCalculo(250);
-    });
-    // Número → barra (permite valores por encima del tope de la barra)
     num.addEventListener("input", () => {
       const x = aNumero(num.value);
-      const malo = x === null || Number.isNaN(x);
+      const malo = x === null || !Number.isFinite(x) || x < 0;
       num.toggleAttribute("aria-invalid", malo);
       num.style.borderColor = malo ? "var(--ensucia)" : "";
       if (malo) return;
-      barra.value = Math.min(x, max);
       pintarEstado(x);
       programarCalculo(500);
     });
