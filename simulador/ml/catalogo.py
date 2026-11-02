@@ -146,28 +146,28 @@ CORTES_ICA = {
 NIVELES = [
     {
         "id": "sin_contaminacion", "orden": 0, "etiqueta": "Sin contaminación",
-        "categoria_ica": "Buena", "color": "#0ca30c", "tinta": "#ffffff", "icono": "✓",
+        "categoria_ica": "Buena", "color": "#0ca30c", "tinta": "#ffffff", "icono": "checkCircle",
         "resumen": "El aire es limpio. Puedes hacer tus actividades con normalidad.",
     },
     {
         "id": "bajo", "orden": 1, "etiqueta": "Bajo",
-        "categoria_ica": "Aceptable", "color": "#fab219", "tinta": "#0b0b0b", "icono": "!",
+        "categoria_ica": "Aceptable", "color": "#fab219", "tinta": "#0b0b0b", "icono": "dotCircle",
         "resumen": "Calidad aceptable. Solo personas muy sensibles deberían moderar esfuerzos largos.",
     },
     {
         "id": "moderado", "orden": 2, "etiqueta": "Moderado",
         "categoria_ica": "Dañina para grupos sensibles", "color": "#ec835a", "tinta": "#0b0b0b",
-        "icono": "!!",
+        "icono": "triangleAlert",
         "resumen": "Niños, adultos mayores y personas con asma o enfermedades cardiacas deben reducir la actividad al aire libre.",
     },
     {
         "id": "alto", "orden": 3, "etiqueta": "Alto",
-        "categoria_ica": "Dañina para la salud", "color": "#d03b3b", "tinta": "#ffffff", "icono": "✕",
+        "categoria_ica": "Dañina para la salud", "color": "#d03b3b", "tinta": "#ffffff", "icono": "shieldAlert",
         "resumen": "Toda la población puede sentir efectos. Evita el ejercicio intenso al aire libre.",
     },
     {
         "id": "critico", "orden": 4, "etiqueta": "Crítico",
-        "categoria_ica": "Muy dañina / Peligrosa", "color": "#7d3c98", "tinta": "#ffffff", "icono": "☠",
+        "categoria_ica": "Muy dañina / Peligrosa", "color": "#7d3c98", "tinta": "#ffffff", "icono": "triangleAlert",
         "resumen": "Emergencia sanitaria. Permanece en interiores y sigue las indicaciones de las autoridades.",
     },
 ]
@@ -177,11 +177,11 @@ NIVELES = [
 #    estado: "si" (adelante) · "precaucion" · "no" (evitar)
 # ---------------------------------------------------------------------------
 ACTIVIDADES = [
-    {"id": "ciclismo", "etiqueta": "Ciclismo", "icono": "🚲"},
-    {"id": "running", "etiqueta": "Correr", "icono": "🏃"},
-    {"id": "tapabocas", "etiqueta": "Tapabocas", "icono": "😷"},
-    {"id": "ventilacion", "etiqueta": "Ventilar espacios", "icono": "🪟"},
-    {"id": "sensibles", "etiqueta": "Niños y grupos sensibles", "icono": "🧒"},
+    {"id": "ciclismo", "etiqueta": "Ciclismo", "icono": "bike"},
+    {"id": "running", "etiqueta": "Correr", "icono": "run"},
+    {"id": "tapabocas", "etiqueta": "Tapabocas", "icono": "mask"},
+    {"id": "ventilacion", "etiqueta": "Ventilar espacios", "icono": "window"},
+    {"id": "sensibles", "etiqueta": "Niños y grupos sensibles", "icono": "users"},
 ]
 
 RECOMENDACIONES = {
@@ -253,35 +253,35 @@ RESULTADOS_TESIS = {
 # ---------------------------------------------------------------------------
 # 5. Lenguaje para el público general (sin jerga técnica)
 # ---------------------------------------------------------------------------
-# nombre: cómo se le dice en la calle · icono: emoji · que_es: una línea.
+# nombre: forma sencilla de nombrarla · icono: clave SVG · que_es: una línea.
 SENCILLO = {
-    "pm2_5": {"nombre": "Humo y hollín fino", "icono": "🌫️",
+    "pm2_5": {"nombre": "Humo y hollín fino", "icono": "particles",
               "que_es": "Partículas tan pequeñas que llegan hasta los pulmones."},
-    "pm10": {"nombre": "Polvo en el aire", "icono": "💨",
+    "pm10": {"nombre": "Polvo en el aire", "icono": "dust",
              "que_es": "Polvo, tierra y polen que flotan en el aire."},
-    "carbon_monoxide": {"nombre": "Humo de motores", "icono": "🚗",
+    "carbon_monoxide": {"nombre": "Humo de motores", "icono": "car",
                         "que_es": "Gas que sale de carros, motos y quemas."},
-    "nitrogen_dioxide": {"nombre": "Gases del tráfico", "icono": "🚌",
+    "nitrogen_dioxide": {"nombre": "Gases del tráfico", "icono": "traffic",
                          "que_es": "Gas que sueltan los carros y buses en las avenidas."},
-    "sulphur_dioxide": {"nombre": "Gases de diésel e industria", "icono": "🏭",
+    "sulphur_dioxide": {"nombre": "Gases de diésel e industria", "icono": "factory",
                         "que_es": "Gas del diésel y de las fábricas."},
-    "ozone": {"nombre": "Ozono", "icono": "🌤️",
+    "ozone": {"nombre": "Ozono", "icono": "sun",
               "que_es": "Gas que se forma con el sol; irrita ojos y garganta."},
-    "aerosol_optical_depth": {"nombre": "Bruma", "icono": "🌁",
+    "aerosol_optical_depth": {"nombre": "Bruma", "icono": "haze",
                               "que_es": "Qué tan opaco u «empañado» se ve el cielo."},
-    "dust": {"nombre": "Polvo del desierto", "icono": "🏜️",
+    "dust": {"nombre": "Polvo del desierto", "icono": "dunes",
              "que_es": "Polvo que llega desde muy lejos, como el Sahara."},
-    "uv_index": {"nombre": "Fuerza del sol", "icono": "☀️",
+    "uv_index": {"nombre": "Fuerza del sol", "icono": "sun",
                  "que_es": "Radiación del sol; ayuda a que se forme ozono."},
 }
 
-# Complemento visual de cada nivel del semáforo
+# Clave SVG, título y frase de cada nivel del semáforo
 NIVELES_SENCILLO = {
-    "sin_contaminacion": {"cara": "😊", "titulo": "Aire limpio", "frase": "Puedes salir con tranquilidad."},
-    "bajo": {"cara": "🙂", "titulo": "Aire aceptable", "frase": "Bien para casi todos."},
-    "moderado": {"cara": "😐", "titulo": "Aire regular", "frase": "Cuidado si eres sensible."},
-    "alto": {"cara": "😷", "titulo": "Aire contaminado", "frase": "Mejor quédate adentro."},
-    "critico": {"cara": "🚨", "titulo": "Aire peligroso", "frase": "No salgas si no es necesario."},
+    "sin_contaminacion": {"cara": "checkCircle", "titulo": "Aire limpio", "frase": "Puedes salir con tranquilidad."},
+    "bajo": {"cara": "dotCircle", "titulo": "Aire aceptable", "frase": "Bien para casi todos."},
+    "moderado": {"cara": "triangleAlert", "titulo": "Aire regular", "frase": "Cuidado si eres sensible."},
+    "alto": {"cara": "shieldAlert", "titulo": "Aire contaminado", "frase": "Mejor quédate adentro."},
+    "critico": {"cara": "triangleAlert", "titulo": "Aire peligroso", "frase": "No salgas si no es necesario."},
 }
 
 # Recomendaciones en máximo 6 palabras

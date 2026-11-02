@@ -6,8 +6,8 @@ Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, pr
 
 | Pantalla | Qué ve el usuario |
 |---|---|
-| **Mi aire** (simulador) | Agrega datos con un selector e introduce sus valores en campos numéricos, sin un tope superior configurado. Todo se recalcula al instante: el cielo de una ciudad animada se aclara o se llena de bruma, una escala de 5 caras marca el nivel y aparecen 5 consejos de máximo seis palabras (ciclismo, correr, tapabocas, ventilar, niños). Un indicador de precisión sugiere el siguiente dato más útil. |
-| **¿Por qué?** (explicabilidad) | Una frase y un «tira y afloja»: a un lado lo que **limpia** el aire, al otro lo que lo **ensucia**, con flechas ▲▲▲ según su influencia. Las tarjetas giran al tocarlas para explicar qué es cada cosa. Sin números ni jerga. |
+| **Mi aire** (simulador) | Agrega datos con un selector e introduce sus valores en campos numéricos, sin un tope superior configurado. Todo se recalcula al instante: un fondo sutil cambia de tono según el nivel, un indicador vectorial marca el estado y aparecen 5 consejos de máximo seis palabras (ciclismo, correr, tapabocas, ventilar, niños). Un indicador de precisión sugiere el siguiente dato más útil. |
+| **¿Por qué?** (explicabilidad) | Una frase y un «tira y afloja»: a un lado lo que **limpia** el aire, al otro lo que lo **ensucia**, con iconos vectoriales que indican su influencia. Las tarjetas giran al tocarlas para explicar qué es cada cosa. Sin números ni jerga. |
 | **¿Es confiable?** (comparador) | Un tiro al blanco: cada dardo es un método y el más cercano al centro es el que menos falla. Cuatro insignias explican la elección y su límite. |
 
 El interruptor **Modo técnico** (pie del menú) muestra para evaluadores las cifras en µg/m³, el gráfico SHAP por variable, la comprobación aditiva y la tabla completa de métricas.
@@ -39,7 +39,7 @@ Coloca ambos JSON (`modelo_pm2_5_XGBoost.json` y `modelo_pm10_XGBoost.json`) en 
 Después:
 
 ```bash
-python manage.py test simulador    # 13 pruebas
+python manage.py test simulador    # pruebas del simulador
 python manage.py runserver
 ```
 
@@ -53,20 +53,20 @@ aire_claro_v3/
 ├── requirements.txt
 ├── config/                      settings.py · urls.py · wsgi.py · asgi.py
 ├── datos/air_quality_historical.csv
-├── ml_models/                   .joblib + benchmark_modelos.json (generados)
+├── ml_models/                   modelos .joblib o .json + benchmark_modelos.json
 ├── scripts/construir_artefactos.py
 ├── simulador/
-│   ├── ml_service.py            pipeline: validar → imputar → 21 variables → predecir → SHAP
+│   ├── ml_service.py            pipeline: validar -> imputar -> 21 variables -> predecir -> SHAP
 │   ├── ml/
 │   │   ├── catalogo.py          variables, umbrales OMS, cortes ICA, recomendaciones, resultados tesis
 │   │   ├── datos.py             limpieza + ingeniería de variables (compartido con el entrenamiento)
-│   │   ├── explicadores.py      shap → contribuciones nativas → TreeSHAP propio
-│   │   └── narrativa.py         SHAP → frases en lenguaje claro
+│   │   ├── explicadores.py      shap -> contribuciones nativas -> TreeSHAP propio
+│   │   └── narrativa.py         SHAP -> frases en lenguaje claro
 │   ├── views.py · urls.py · tests.py
 │   ├── templates/simulador/index.html
-│   └── static/simulador/  css/styles.css · js/app.js · js/charts.js
+│   └── static/simulador/  css/styles.css · js/app.js · js/charts.js · js/icons.js
 ├── README.md
-└── DOCUMENTACION_FLUJO_DE_DATOS.md   ← recorrido didáctico pantalla → SHAP
+└── DOCUMENTACION_FLUJO_DE_DATOS.md   recorrido didáctico de la pantalla a SHAP
 ```
 
 ## API

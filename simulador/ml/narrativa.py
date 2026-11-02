@@ -145,8 +145,8 @@ def explicacion_simple(contribs: list[dict], pred: float, base: float,
                        stats: dict, sencillo: dict, max_por_lado: int = 3) -> dict:
     """Resume los aportes SHAP en: una frase + lo que ensucia + lo que ayuda.
 
-    fuerza (1-3) es relativa al factor más influyente, para dibujar flechas
-    en lugar de mostrar µg/m³.
+    fuerza (1-3) es relativa al factor más influyente, para usar iconos
+    vectoriales en lugar de mostrar µg/m³.
     """
     total = sum(abs(c["aporte"]) for c in contribs) or 1.0
     minimo = max(0.15, 0.05 * total)

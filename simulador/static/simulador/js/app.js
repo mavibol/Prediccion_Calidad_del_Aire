@@ -8,10 +8,10 @@
      3. Cada movimiento programa un cálculo (espera 250 ms a que se detenga).
      4. calcular() envía los pares [variable : valor] con fetch() a /api/predecir/.
      5. El servidor imputa lo que falta, predice y calcula SHAP.
-     6. Se repinta: cielo de la ciudad, escala de caras, recomendaciones y
+     6. Se repinta: banner de estado, escala, recomendaciones y
         el «tira y afloja» de factores que ensucian o limpian el aire.
 
-   Regla de diseño: el público solo ve caras, iconos y frases cortas.
+   Regla de diseño: el público ve estados, iconos y frases cortas.
    Las cifras quedan detrás del interruptor «Modo técnico».
    ===================================================================== */
 (function () {
@@ -23,9 +23,10 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const { fmt, fmtSigno } = window.Graficos;
+  const icono = window.Iconos.svg;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  // "12,5" o "12.5" → 12.5 ; "" → null ; texto → NaN
+  // "12,5" o "12.5" se convierte a 12.5; "" se convierte a null; texto a NaN.
   function aNumero(txt) {
     const s = String(txt ?? "").trim().replace(/\s/g, "");
     if (s === "") return null;
@@ -46,10 +47,10 @@
   const PORID = Object.fromEntries(CATALOGO.map((v) => [v.id, v]));
   const CSRF = $('meta[name="csrf-token"]').content;
   const COLOR_NIVEL = ["#0ca30c", "#f2b005", "#ec835a", "#d03b3b", "#7d3c98"];
-  const CARAS = [["😊", "Limpio"], ["🙂", "Aceptable"], ["😐", "Regular"], ["😷", "Contaminado"], ["🚨", "Peligroso"]];
+  const CARAS = [["checkCircle", "Limpio"], ["dotCircle", "Aceptable"], ["triangleAlert", "Regular"], ["shieldAlert", "Contaminado"], ["triangleAlert", "Peligroso"]];
 
   const estado = {
-    filas: new Map(),      // id de variable → <li>
+    filas: new Map(),      // id de variable a <li>
     resultado: null,       // última respuesta del servidor
     peticion: null,        // AbortController de la petición en curso
     temporizador: null,
@@ -120,7 +121,7 @@
   function poblarSelector() {
     const libres = CATALOGO.filter((v) => !estado.filas.has(v.id));
     selector.innerHTML = libres.length
-      ? libres.map((v) => `<option value="${v.id}">${v.simple_icono}  ${esc(v.simple_nombre)}${v.estrellas === 3 ? "  ★" : ""}</option>`).join("")
+      ? libres.map((v) => `<option value="${v.id}">${esc(v.simple_nombre)}${v.estrellas === 3 ? " (más relevante)" : ""}</option>`).join("")
       : `<option value="">Ya agregaste todos los datos</option>`;
     selector.disabled = $("#btn-agregar").disabled = !libres.length;
     $("#btn-limpiar").hidden = estado.filas.size === 0;
@@ -143,10 +144,10 @@
     li.dataset.variable = id;
     li.innerHTML = `
       <div class="dato__cab">
-        <span class="dato__ico" aria-hidden="true">${v.simple_icono}</span>
+        <span class="dato__ico" aria-hidden="true">${icono(v.simple_icono, "icon")}</span>
         <span class="dato__nombre">${esc(v.simple_nombre)}<small>${esc(v.etiqueta)} · ${esc(v.unidad)}</small></span>
         <button type="button" class="dato__info" aria-label="¿Qué es ${esc(v.simple_nombre)}?" aria-expanded="false">?</button>
-        <button type="button" class="dato__quitar" aria-label="Quitar ${esc(v.simple_nombre)}">✕</button>
+        <button type="button" class="dato__quitar" aria-label="Quitar ${esc(v.simple_nombre)}">${icono("x", "icon")}</button>
       </div>
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
@@ -272,27 +273,27 @@
     $("#bienvenida").hidden = true;
     $("#resultado").hidden = false;
 
-    // 5.1 El cielo de la ciudad cambia con el nivel
+    // 5.1 El banner cambia de tono según el nivel
     if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
     estado.escena.actualizar(a.orden);
     const ver = $("#veredicto");
     const clave = a.titulo + a.cara;
     if (ver.dataset.clave !== clave) { // solo «rebota» la cara si cambió el nivel
       ver.dataset.clave = clave;
-      ver.innerHTML = `<span class="veredicto__cara" aria-hidden="true">${a.cara}</span>
+      ver.innerHTML = `<span class="veredicto__cara" aria-hidden="true">${icono(a.cara, "icon")}</span>
         <span><span class="veredicto__titulo">${esc(a.titulo)}</span><br><span class="veredicto__frase">${esc(a.frase)}</span></span>`;
     }
 
-    // 5.2 Escala de cinco caras (color + cara + palabra)
+    // 5.2 Escala de cinco estados (color + icono + palabra)
     $("#escala").innerHTML = CARAS.map(([cara, txt], i) => `
       <div class="escalon ${i === a.orden ? "activo" : ""}" style="color:${COLOR_NIVEL[i]}" ${i === a.orden ? 'aria-current="true"' : ""}>
-        <span class="escalon__cara" aria-hidden="true">${cara}</span>
+        <span class="escalon__cara" aria-hidden="true">${icono(cara, "icon")}</span>
         <span class="escalon__txt" style="color:var(--tinta)">${txt}</span>
         <span class="escalon__barra" style="background:${COLOR_NIVEL[i]}"></span>
       </div>`).join("");
 
     $("#alerta-local").hidden = !a.dia_critico_local;
-    $("#alerta-local").textContent = "⚠ Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.";
+    $("#alerta-local").innerHTML = `${icono("triangleAlert", "icon")} Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.`;
 
     // 5.3 Precisión: puntos + sugerencia del dato más útil que falta
     const faltante = CATALOGO.find((v) => !estado.filas.has(v.id));
@@ -300,24 +301,24 @@
     $("#precision").innerHTML = `<h3>Precisión</h3>
       <div class="precision__puntos" aria-label="${pts} de 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= pts ? "lleno" : ""}"></i>`).join("")}</div>
       <span class="suave">${pts >= 4 ? "¡Muy bien! Tienes casi todos los datos importantes." : "Agrega más datos para afinar el resultado."}</span>
-      ${faltante && pts < 5 ? `<button type="button" class="sugerencia" data-id="${faltante.id}">➕ Agregar ${faltante.simple_icono} ${esc(faltante.simple_nombre)}</button>` : ""}`;
+      ${faltante && pts < 5 ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.simple_nombre)}</button>` : ""}`;
     const sug = $(".sugerencia", $("#precision"));
     if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
 
     // 5.4 Avance del «¿por qué?»: lo que más ensucia y lo que más ayuda
     const s = d.explicacion[a.contaminante].simple;
-    const fila = (f, tipo) => f ? `<div class="porque-mini__fila"><b aria-hidden="true">${f.icono}</b>
-        <span><strong>${esc(f.nombre)}</strong> ${tipo === "e" ? "<span style='color:var(--ensucia)'>ensucia ▲</span>" : "<span style='color:var(--limpia)'>limpia ▼</span>"}</span></div>` : "";
+    const fila = (f, tipo) => f ? `<div class="porque-mini__fila"><b aria-hidden="true">${icono(f.icono, "icon")}</b>
+        <span><strong>${esc(f.nombre)}</strong> ${tipo === "e" ? `<span class="porque-mini__ensucia">${icono("arrowUp", "icon")} ensucia</span>` : `<span class="porque-mini__limpia">${icono("arrowDown", "icon")} limpia</span>`}</span></div>` : "";
     $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.empeoran[0], "e")}${fila(s.ayudan[0], "a")}
       ${!s.empeoran.length && !s.ayudan.length ? `<p class="suave">Todo está dentro de lo normal.</p>` : ""}
-      <span class="ver-mas">Ver la explicación →</span>`;
+      <span class="ver-mas">Ver la explicación ${icono("arrowRight", "icon")}</span>`;
 
     // 5.5 Consejos para hoy (máximo seis palabras cada uno)
-    const SELLO = { si: "✓", precaucion: "!", no: "✕" };
+    const SELLO = { si: "checkCircle", precaucion: "triangleAlert", no: "x" };
     $("#recomendaciones").innerHTML = d.recomendaciones.map((r) => `
       <div class="rec rec--${r.estado}" title="${esc(r.texto)}">
-        <span class="rec__sello" aria-label="${r.estado === "si" ? "Sí" : r.estado === "no" ? "No" : "Con cuidado"}">${SELLO[r.estado]}</span>
-        <div class="rec__ico" aria-hidden="true">${r.icono}</div>
+        <span class="rec__sello" aria-label="${r.estado === "si" ? "Sí" : r.estado === "no" ? "No" : "Con cuidado"}">${icono(SELLO[r.estado], "icon")}</span>
+        <div class="rec__ico" aria-hidden="true">${icono(r.icono, "icon")}</div>
         <div class="rec__tit">${esc(r.etiqueta)}</div>
         <div class="rec__txt">${esc(r.corto)}</div>
       </div>`).join("");
@@ -326,7 +327,7 @@
     const mini = $("#mini-estado");
     mini.style.background = COLOR_NIVEL[a.orden];
     mini.style.color = a.tinta;
-    mini.innerHTML = `<span>${a.cara}</span>${esc(a.titulo)}`;
+    mini.innerHTML = `${icono(a.cara, "icon")} ${esc(a.titulo)}`;
     mini.classList.add("visible");
 
     // 5.7 Modo técnico: las cifras reales
@@ -345,15 +346,15 @@
      ----------------------------------------------------------------- */
   function tarjetaFactor(f, tipo) {
     const color = tipo === "e" ? "var(--ensucia)" : "var(--limpia)";
-    const flecha = tipo === "e" ? "▲" : "▼";
-    const fuerza = [1, 2, 3].map((i) => `<span class="${i <= f.fuerza ? "" : "apagada"}">${flecha}</span>`).join("");
+    const flecha = tipo === "e" ? "arrowUp" : "arrowDown";
+    const fuerza = [1, 2, 3].map((i) => `<span class="${i <= f.fuerza ? "" : "apagada"}">${icono(flecha, "icon")}</span>`).join("");
     const d = f.valor < 5 ? 2 : 1;
     return `<button type="button" class="factor ${f.origen === "estimada" ? "factor--estimada" : ""}" style="--color:${color}"
               aria-label="${esc(f.nombre)}: ${tipo === "e" ? "ensucia" : "limpia"} el aire. Toca para saber más.">
       <span class="factor__giro">
         <span class="factor__cara">
           <span class="factor__fila">
-            <span class="factor__ico" aria-hidden="true">${f.icono}</span>
+            <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
             <span><span class="factor__nombre">${esc(f.nombre)}</span><br>
               <span class="factor__estado">${f.estado_txt ? esc(f.estado_txt[0].toUpperCase() + f.estado_txt.slice(1)) : tipo === "e" ? "Sube el riesgo" : "Baja el riesgo"}</span></span>
             <span class="factor__fuerza" aria-hidden="true">${fuerza}</span>
@@ -361,7 +362,7 @@
           ${f.origen === "estimada" ? `<span class="factor__pista">No lo diste: lo calculamos por ti</span>` : ""}
         </span>
         <span class="factor__dorso">
-          <b>${f.icono} ${esc(f.nombre)}</b>
+          <b>${icono(f.icono, "icon")} ${esc(f.nombre)}</b>
           <span>${esc(f.que_es)}</span>
           <span class="suave">Valor usado: ${fmt(f.valor, d)} · normal: ${fmt(f.normal, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
         </span>
@@ -378,7 +379,7 @@
     $("#xai-frase").textContent = s.frase;
     // Nudo de la cuerda: se corre hacia el lado que «gana»
     const nudo = $("#nudo");
-    nudo.textContent = a.cara;
+    nudo.innerHTML = icono(a.cara, "icon");
     nudo.style.borderColor = COLOR_NIVEL[a.orden];
     requestAnimationFrame(() => (nudo.style.left = Math.min(92, Math.max(8, s.balance * 100)) + "%"));
 
@@ -387,7 +388,7 @@
     $("#col-empeoran").innerHTML = s.empeoran.length ? s.empeoran.map((f) => tarjetaFactor(f, "e")).join("")
       : `<div class="columna__vacia">Nada destacado de este lado</div>`;
     $$(".factor").forEach((b) => b.addEventListener("click", () => b.classList.toggle("girada")));
-    $("#xai-nota").textContent = "Toca una tarjeta para saber qué es. Más flechas = más influencia." +
+    $("#xai-nota").textContent = "Toca una tarjeta para saber qué es. Mayor intensidad del icono = más influencia." +
       (s.hay_estimadas ? " Las tarjetas punteadas son datos que no diste: los calculamos por ti." : "");
 
     // Modo técnico: SHAP por variable para PM2.5 o PM10
@@ -402,7 +403,7 @@
       window.Graficos.barrasDivergentes($("#grafico-barras"), items);
     const v = e.verificacion_aditiva;
     $("#xai-ecuacion").innerHTML = `Base ${fmt(e.valor_base, 3)} + Σ aportes ${fmtSigno(v.base_mas_aportes - e.valor_base, 3)}
-      = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${v.ok ? "✓ aditividad SHAP" : "✗"}`;
+      = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${icono(v.ok ? "checkCircle" : "triangleAlert", "icon")} ${v.ok ? "aditividad SHAP verificada" : "revisar aditividad SHAP"}`;
   }
   $$("#xai-tabs button").forEach((b) => b.addEventListener("click", () => { estado.objetivoTec = b.dataset.objetivo; pintarPorque(); }));
 
@@ -460,7 +461,6 @@
       mejora = b.tesis.mejora_vs_persistencia[clave];
     }
 
-    const medallas = ["🥇", "🥈", "🥉"];
     const orden = [...modelos].sort((x, y) => x.mae - y.mae);
     const tecTabla = calc ? `<div class="tarjeta tec" style="margin-top:22px">
         <div class="segmentado" role="tablist" id="bm-tabs">
@@ -475,28 +475,28 @@
           <td class="num">${m.prueba.mae_criticos != null ? fmt(m.prueba.mae_criticos, 3) : "—"}</td>
           <td class="num">${m.estabilidad ? fmt(m.estabilidad.desv, 3) : "—"}</td></tr>`).join("")}
         </tbody></table>
-        <p class="suave">${b.calculado.sustituto ? "⚠ Calculado con un sustituto de XGBoost (scikit-learn). " : ""}Tesis (prueba): XGBoost MAE ${fmt(b.tesis.prueba[1][clave].mae, 3)} · R² ${fmt(b.tesis.prueba[1][clave].r2, 3)}.
+        <p class="suave">${b.calculado.sustituto ? `${icono("triangleAlert", "icon")} Calculado con un sustituto de XGBoost (scikit-learn). ` : ""}Tesis (prueba): XGBoost MAE ${fmt(b.tesis.prueba[1][clave].mae, 3)} · R² ${fmt(b.tesis.prueba[1][clave].r2, 3)}.
         El escenario B (mismo día) logra R² ${fmt(b.tesis.prueba[2][clave].r2, 3)}, pero describe el presente; el objetivo es anticipar.</p></div>` : "";
 
     $("#bm-contenido").innerHTML = `
       <div class="rejilla-conf">
         <div class="tarjeta diana" id="diana"></div>
         <div>
-          <p class="frase-grande">🎯 Elegimos <b>${esc(elegido.nombre)}</b> porque es el que menos se equivoca.</p>
+          <p class="frase-grande">${icono("target", "icon")} Elegimos <b>${esc(elegido.nombre)}</b> porque es el que menos se equivoca.</p>
           <p class="suave">Cada dardo es una forma distinta de adivinar el aire de mañana. El centro es el acierto perfecto: entre más cerca, mejor adivina.</p>
           <ol class="podio-lista">${orden.map((m, i) => `<li class="${m.elegido ? "elegido" : ""}">
-            <span class="medalla" aria-hidden="true">${medallas[i] || "·"}</span>${esc(m.nombre)}${m.elegido ? " ⭐" : ""}
+            <span class="medalla" aria-label="Puesto ${i + 1}">${i + 1}</span>${esc(m.nombre)}${m.elegido ? ` ${icono("star", "icon")}` : ""}
             <span class="pin" style="background:${m.color}" aria-hidden="true"></span></li>`).join("")}</ol>
         </div>
       </div>
       <div class="insignias">
-        <div class="insignia"><span class="insignia__ico">🎯</span><b>Más certero</b>
+        <div class="insignia"><span class="insignia__ico">${icono("target", "icon")}</span><b>Más certero</b>
           <span>Falla ${fmt(mejora, 0)} % menos que «repetir lo de ayer».</span></div>
-        <div class="insignia"><span class="insignia__ico">📏</span><b>Constante</b>
+        <div class="insignia"><span class="insignia__ico">${icono("ruler", "icon")}</span><b>Constante</b>
           <span>${estab === 1 ? "Es el más parejo en las distintas épocas del año." : "Lo probamos en varias épocas del año y se mantuvo."}</span></div>
-        <div class="insignia"><span class="insignia__ico">⚡</span><b>Rápido y transparente</b>
+        <div class="insignia"><span class="insignia__ico">${icono("bolt", "icon")}</span><b>Rápido y transparente</b>
           <span>Responde al instante y te dice por qué.</span></div>
-        ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">⚠️</span><b>Su límite</b>
+        ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">${icono("triangleAlert", "icon")}</span><b>Su límite</b>
           <span>Le cuesta anticipar los días más contaminados.</span></div>` : ""}
       </div>${tecTabla}`;
 

@@ -1,7 +1,7 @@
 /* =====================================================================
    charts.js · Dibujos SVG de Aire Claro (sin librerías externas)
    ---------------------------------------------------------------------
-   · escena()            paisaje de la ciudad cuyo cielo cambia con el nivel
+   · escena()            fondo semántico que cambia con el nivel del aire
    · diana()             tiro al blanco: entre más cerca del centro, menos falla
    · barrasDivergentes() aportes SHAP (solo en modo técnico)
    ===================================================================== */
@@ -24,12 +24,6 @@
     t.textContent = contenido;
     return t;
   }
-  // Números pseudoaleatorios con semilla: el paisaje se ve igual en cada carga
-  function azar(semilla) {
-    let s = semilla;
-    return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  }
-
   // Tooltip compartido: filas [[clave, valor], ...]
   function conTooltip(nodo, titulo, filas) {
     const tt = () => document.getElementById("tooltip");
@@ -53,79 +47,41 @@
   }
 
   // ===================================================================
-  // 1. ESCENA: el cielo de la ciudad
-  //    Se dibuja una sola vez; actualizar(nivel) solo cambia colores,
-  //    opacidades y partículas, con transiciones CSS suaves.
+  // 1. ESCENA: fondo semántico sobrio, sin siluetas de edificios
   // ===================================================================
   const NIVEL_ESCENA = {
-    cielo:      ["#79c3f2", "#a7cde3", "#c9c1a2", "#b49e88", "#8c7884"],
-    montana:    ["#86b6a2", "#93ae9e", "#a6a58e", "#a0917d", "#857580"],
+    fondo:      ["#e7f4e9", "#f4f2df", "#fff0df", "#fbe8e6", "#eee8f5"],
+    acento:     ["#26734d", "#8a7418", "#a95b27", "#a33d3d", "#704593"],
     sol:        [1, .85, .55, .3, .12],
-    bruma:      [0, .1, .26, .42, .58],
-    particulas: [0, 10, 26, 46, 72],
-    persona:    ["🚴", "🚴", "🚶", "😷", "🏠"],
   };
 
   function escena(contenedor) {
-    const W = 640, H = 300, r = azar(7);
+    const W = 640, H = 300;
     contenedor.innerHTML = "";
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Cielo de la ciudad" }, contenedor);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Fondo de color según la calidad del aire" }, contenedor);
     const defs = el("defs", {}, svg);
-    const g = el("linearGradient", { id: "brillo", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-    el("stop", { offset: "45%", "stop-color": "#fff", "stop-opacity": 0 }, g);
-    el("stop", { offset: "100%", "stop-color": "#fff", "stop-opacity": .45 }, g);
-
-    const cielo = el("rect", { class: "cielo", width: W, height: H }, svg);
-    el("rect", { width: W, height: H, fill: "url(#brillo)" }, svg);
+    const gradiente = el("linearGradient", { id: "fondo-aire", x1: 0, y1: 0, x2: 1, y2: 1 }, defs);
+    el("stop", { class: "tono-inicial", offset: "0%", "stop-color": NIVEL_ESCENA.fondo[0] }, gradiente);
+    el("stop", { class: "tono-final", offset: "100%", "stop-color": "#fff" }, gradiente);
+    el("rect", { class: "cielo", width: W, height: H, fill: "url(#fondo-aire)" }, svg);
+    el("circle", { cx: 500, cy: 110, r: 145, fill: "#fff", opacity: .46 }, svg);
     const sol = el("g", { class: "sol" }, svg);
-    el("circle", { cx: 540, cy: 76, r: 56, fill: "#ffe082", opacity: .35 }, sol);
-    el("circle", { cx: 540, cy: 76, r: 36, fill: "#ffd54f" }, sol);
-    // Nubes
-    [[120, 64, 1], [330, 44, .8]].forEach(([x, y, k]) => {
-      const n = el("g", { opacity: .85 }, svg);
-      [[0, 0, 26], [24, -10, 22], [48, 0, 24], [22, 8, 26]].forEach(([dx, dy, rr]) =>
-        el("circle", { cx: x + dx * k, cy: y + dy * k, r: rr * k, fill: "#fff" }, n));
-    });
-    const montana = el("path", { class: "montana", d: "M0 205 L90 150 L170 192 L260 128 L360 198 L450 148 L560 188 L640 158 V300 H0Z" }, svg);
-
-    // Edificios con ventanas
-    let x = 0;
-    const edificios = el("g", {}, svg);
-    while (x < W) {
-      const w = 34 + r() * 46, h = 40 + r() * 75;
-      el("rect", { x, y: 270 - h, width: w - 4, height: h, fill: r() > .5 ? "#2e4440" : "#36504a", rx: 2 }, edificios);
-      for (let wy = 270 - h + 10; wy < 258; wy += 16)
-        for (let wx = x + 6; wx < x + w - 12; wx += 11)
-          if (r() > .45) el("rect", { x: wx, y: wy, width: 5, height: 7, fill: "#ffe9a8", opacity: .75 }, edificios);
-      x += w;
-    }
-    // Árboles y suelo
-    for (let i = 0; i < 9; i++) {
-      const tx = 30 + i * 72 + r() * 20;
-      el("rect", { x: tx - 2, y: 258, width: 4, height: 14, fill: "#5b4636" }, svg);
-      el("circle", { cx: tx, cy: 252, r: 11 + r() * 5, fill: "#3c8d5a" }, svg);
-    }
-    el("rect", { y: 270, width: W, height: 30, fill: "#4f6b5f" }, svg);
-    const persona = texto(svg, 40, 290, "🚴", { class: "persona" });
-
-    // Bruma y partículas (lo que «ensucia» el cielo)
-    const bruma = el("rect", { class: "bruma", width: W, height: H, fill: "#8c7d6a", opacity: 0 }, svg);
-    const parts = el("g", {}, svg);
-    const particulas = Array.from({ length: 72 }, () =>
-      el("circle", {
-        class: "particula", cx: r() * W, cy: 10 + r() * 250, r: 1.5 + r() * 2.5, fill: "#5a4e45", opacity: 0,
-        style: `--dur:${7 + r() * 8}s;--retraso:-${r() * 10}s`,
-      }, parts));
+    el("circle", { cx: 535, cy: 82, r: 54, fill: "#fff", opacity: .72 }, sol);
+    el("circle", { cx: 535, cy: 82, r: 34, fill: "#fff", opacity: .9 }, sol);
+    const flujo = el("g", { class: "flujo", fill: "none", "stroke-width": 5, "stroke-linecap": "round" }, svg);
+    [
+      "M92 112h184c26 0 26-38 0-38h-24",
+      "M60 151h250c30 0 30 42 0 42h-30",
+      "M112 224h150c23 0 23-32 0-32",
+    ].forEach((d) => el("path", { d }, flujo));
 
     function actualizar(nivel) {
       const n = Math.max(0, Math.min(4, nivel));
-      cielo.setAttribute("fill", NIVEL_ESCENA.cielo[n]);
-      montana.setAttribute("fill", NIVEL_ESCENA.montana[n]);
+      svg.querySelector(".tono-inicial").setAttribute("stop-color", NIVEL_ESCENA.fondo[n]);
+      svg.querySelector(".tono-final").setAttribute("stop-color", n < 2 ? "#f8fcf8" : "#fffafa");
       sol.setAttribute("opacity", NIVEL_ESCENA.sol[n]);
-      bruma.setAttribute("opacity", NIVEL_ESCENA.bruma[n]);
-      persona.textContent = NIVEL_ESCENA.persona[n];
-      const visibles = NIVEL_ESCENA.particulas[n];
-      particulas.forEach((p, i) => p.setAttribute("opacity", i < visibles ? .55 : 0));
+      flujo.setAttribute("stroke", NIVEL_ESCENA.acento[n]);
+      flujo.setAttribute("opacity", .56);
     }
     actualizar(0);
     return { actualizar };
@@ -157,7 +113,7 @@
       el("line", { x1: x, y1: y, x2: x + 22, y2: y - 22, stroke: "#4b5a56", "stroke-width": 2.5, "stroke-linecap": "round" }, g);
       el("path", { d: `M${x + 18} ${y - 26} l10 -2 l-2 10 z`, fill: m.color }, g);
       el("circle", { cx: x, cy: y, r: m.elegido ? 12 : 9, fill: m.color, stroke: "#fff", "stroke-width": 3 }, g);
-      if (m.elegido) texto(g, x, y + 30, "⭐ elegido", { "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#10201c" });
+      if (m.elegido) texto(g, x, y + 30, "Elegido", { "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#10201c" });
       conTooltip(g, m.nombre, [["Se equivoca en promedio", `± ${fmt(m.mae, 2)} ${unidad}`]]);
       // «Lanzamiento» escalonado
       setTimeout(() => { g.style.transform = "translate(0,0)"; g.style.opacity = 1; }, 150 + i * 180);

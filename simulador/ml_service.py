@@ -243,7 +243,7 @@ class ServicioML:
     def _importancia_global(self):
         """|SHAP| medio por variable en una muestra de entrenamiento.
 
-        Sirve para dos cosas: ordenar el selector (★) y medir la "cobertura"
+        Sirve para dos cosas: ordenar el selector y medir la "cobertura"
         de información que aporta el usuario.
         """
         muestra = self.train.iloc[::6]  # ~150 días repartidos en el periodo

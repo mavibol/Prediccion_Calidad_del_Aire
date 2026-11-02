@@ -23,13 +23,13 @@
     </button>
     <nav class="sidebar__nav">
       <a href="#simulador" class="nav-item" data-vista="simulador">
-        <span class="nav-item__icono" aria-hidden="true">🌤️</span><span class="nav-item__txt">Mi aire</span>
+        <span class="nav-item__icono" data-icon="air" aria-hidden="true"></span><span class="nav-item__txt">Mi aire</span>
       </a>
       <a href="#explicabilidad" class="nav-item" data-vista="explicabilidad">
-        <span class="nav-item__icono" aria-hidden="true">🔍</span><span class="nav-item__txt">¿Por qué?</span>
+        <span class="nav-item__icono" data-icon="search" aria-hidden="true"></span><span class="nav-item__txt">¿Por qué?</span>
       </a>
       <a href="#modelos" class="nav-item" data-vista="modelos">
-        <span class="nav-item__icono" aria-hidden="true">🎯</span><span class="nav-item__txt">¿Es confiable?</span>
+        <span class="nav-item__icono" data-icon="target" aria-hidden="true"></span><span class="nav-item__txt">¿Es confiable?</span>
       </a>
     </nav>
     <div class="sidebar__pie">
@@ -73,7 +73,7 @@
           <div class="agregador">
             <label for="selector-variable" class="sr-only">Elige un dato</label>
             <select id="selector-variable" class="campo"></select>
-            <button id="btn-agregar" type="button" class="btn btn--primario">＋ Agregar</button>
+            <button id="btn-agregar" type="button" class="btn btn--primario"><span data-icon="plus" aria-hidden="true"></span> Agregar</button>
           </div>
 
           <ul class="lista-variables" id="lista-variables" aria-label="Datos agregados"></ul>
@@ -81,22 +81,22 @@
           <div class="ejemplos">
             <span>¿Sin datos? Prueba un ejemplo:</span>
             <div class="ejemplos__chips">
-              <button type="button" class="chip" data-escenario="p10">🌤️ Día limpio</button>
-              <button type="button" class="chip" data-escenario="mediana">🙂 Día normal</button>
-              <button type="button" class="chip" data-escenario="p90">🌫️ Día cargado</button>
+              <button type="button" class="chip" data-escenario="p10"><span data-icon="sun" aria-hidden="true"></span> Día limpio</button>
+              <button type="button" class="chip" data-escenario="mediana"><span data-icon="dotCircle" aria-hidden="true"></span> Día normal</button>
+              <button type="button" class="chip" data-escenario="p90"><span data-icon="haze" aria-hidden="true"></span> Día cargado</button>
             </div>
           </div>
-          <button id="btn-limpiar" type="button" class="btn btn--fantasma" hidden>↺ Empezar de nuevo</button>
+          <button id="btn-limpiar" type="button" class="btn btn--fantasma" hidden><span data-icon="rotateCcw" aria-hidden="true"></span> Empezar de nuevo</button>
         </div>
 
         <div class="panel-resultado" aria-live="polite">
           <!-- Bienvenida: tres pasos -->
           <div class="tarjeta bienvenida" id="bienvenida">
-            <div class="paso"><span class="paso__ico">➕</span><b>Agrega un dato</b><span>Por ejemplo, el humo o el polvo.</span></div>
-            <div class="paso__flecha" aria-hidden="true">→</div>
-            <div class="paso"><span class="paso__ico">⌨️</span><b>Escribe el valor</b><span>Ingresa la cantidad que quieras.</span></div>
-            <div class="paso__flecha" aria-hidden="true">→</div>
-            <div class="paso"><span class="paso__ico">👀</span><b>Mira el cielo</b><span>Cambia al instante.</span></div>
+            <div class="paso"><span class="paso__ico" data-icon="plus" aria-hidden="true"></span><b>Agrega un dato</b><span>Por ejemplo, el humo o el polvo.</span></div>
+            <div class="paso__flecha" data-icon="arrowRight" aria-hidden="true"></div>
+            <div class="paso"><span class="paso__ico" data-icon="ruler" aria-hidden="true"></span><b>Escribe el valor</b><span>Ingresa la cantidad que quieras.</span></div>
+            <div class="paso__flecha" data-icon="arrowRight" aria-hidden="true"></div>
+            <div class="paso"><span class="paso__ico" data-icon="eye" aria-hidden="true"></span><b>Mira el cielo</b><span>Cambia al instante.</span></div>
           </div>
 
           <div id="resultado" hidden>
@@ -128,14 +128,14 @@
     <!-- ---------- VISTA 2: ¿POR QUÉ? ---------- -->
     <section class="vista" id="vista-explicabilidad" hidden data-titulo="¿Por qué?" data-sub="Qué ensucia el aire y qué lo ayuda a mantenerse limpio.">
       <div class="tarjeta vacio-grande" id="xai-vacio">
-        <span class="vacio-grande__ico">🔍</span>
+        <span class="vacio-grande__ico" data-icon="search" aria-hidden="true"></span>
         <p>Primero agrega algún dato en <b>Mi aire</b>.</p>
         <a class="btn btn--primario" href="#simulador">Ir a Mi aire</a>
       </div>
       <div id="xai-contenido" hidden>
         <p class="frase-grande" id="xai-frase"></p>
         <div class="tarjeta tira">
-          <div class="tira__lados"><span class="tira__lado tira__lado--ayuda">💙 Limpian el aire</span><span class="tira__lado tira__lado--ensucia">Ensucian el aire ❤️</span></div>
+          <div class="tira__lados"><span class="tira__lado tira__lado--ayuda"><span data-icon="heart" aria-hidden="true"></span> Limpian el aire</span><span class="tira__lado tira__lado--ensucia">Ensucian el aire <span data-icon="heart" aria-hidden="true"></span></span></div>
           <div class="cuerda" aria-hidden="true"><span class="cuerda__linea"></span><span class="cuerda__nudo" id="nudo"></span></div>
           <div class="tira__columnas">
             <div class="columna" id="col-ayudan"></div>
@@ -167,6 +167,7 @@
 
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
+<script src="{% static 'simulador/js/icons.js' %}"></script>
 <script src="{% static 'simulador/js/charts.js' %}"></script>
 <script src="{% static 'simulador/js/app.js' %}"></script>
 </body>
