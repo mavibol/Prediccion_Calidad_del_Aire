@@ -467,6 +467,7 @@ class ServicioML:
             "explicacion": explicaciones,
             "avisos": avisos,
             "tecnico": {
+                "algoritmo": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()},
                 "explicador": {k: o.explicador.nombre for k, o in self.objetivos.items()},
                 "filas_calendario": len(filas),
                 "imputacion": "iterativa" if self.imputador is not None else "mediana",

@@ -386,13 +386,47 @@
 
     // 5.7 Modo técnico: las cifras reales
     const p = d.predicciones;
-    $("#tec-simulador").innerHTML = `<h3>Detalle técnico</h3><div class="tec-cifras">
-      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm2_5.error_tipico, 2)} · rango empírico P95 validación ${fmt(p.pm2_5.intervalo_p95.inferior, 2)}–${fmt(p.pm2_5.intervalo_p95.superior, 2)} µg/m³</div>
-      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm10.error_tipico, 2)} · rango empírico P95 validación ${fmt(p.pm10.intervalo_p95.inferior, 2)}–${fmt(p.pm10.intervalo_p95.superior, 2)} µg/m³</div>
-      <div>Cobertura de importancia<b>${fmt(d.cobertura.porcentaje, 1)} %</b>PM2.5 ${fmt(d.cobertura.por_objetivo.pm2_5, 0)} % · PM10 ${fmt(d.cobertura.por_objetivo.pm10, 0)} %</div>
-      <div>Categoría ICA<b>${esc(a.categoria_ica)}</b>${esc(a.motivo)}</div></div>
-      <p class="suave">Estimadas: ${d.entrada.estimadas.map((e) => `${esc(e.etiqueta)} ≈ ${fmt(e.valor, 2)}`).join(" · ") || "ninguna"} ·
-      ${esc(d.tecnico.explicador[a.contaminante])} · ${fmt(d.tecnico.latencia_ms, 0)} ms</p>`;
+    const exp = d.explicacion[a.contaminante];
+    const objetivo = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
+    const margen = p[a.contaminante];
+    $("#tec-simulador").innerHTML = `
+      <header class="tec-simulador__cabecera">
+        <div>
+          <h3>Inspección técnica y diagnóstico del modelo</h3>
+          <p>Detalle del pronóstico de ${objetivo} para mañana.</p>
+        </div>
+        <span class="tec-simulador__chip">Vista técnica</span>
+      </header>
+      <div class="tec-kpis">
+        <article class="tec-kpi">
+          <span class="tec-kpi__etiqueta">Métrica base · E[f(x)]</span>
+          <strong>${fmt(exp.valor_base, 2)} µg/m³</strong>
+          <span>Valor esperado global del modelo</span>
+        </article>
+        <article class="tec-kpi">
+          <span class="tec-kpi__etiqueta">Margen de error</span>
+          <strong>± ${fmt(margen.margen_p95, 2)} µg/m³</strong>
+          <span>Rango P95: ${fmt(margen.intervalo_p95.inferior, 2)}–${fmt(margen.intervalo_p95.superior, 2)} µg/m³ · MAE ${fmt(margen.error_tipico, 2)}</span>
+        </article>
+        <article class="tec-kpi">
+          <span class="tec-kpi__etiqueta">Cobertura del modelo</span>
+          <strong>${fmt(d.cobertura.por_objetivo[a.contaminante], 1)} %</strong>
+          <span>Importancia cubierta por los datos ingresados</span>
+        </article>
+        <article class="tec-kpi">
+          <span class="tec-kpi__etiqueta">Firma del modelo</span>
+          <strong>${esc(d.tecnico.algoritmo[a.contaminante])}</strong>
+          <span>${esc(d.tecnico.explicador[a.contaminante])}</span>
+        </article>
+      </div>
+      <div class="tec-simulador__detalle">
+        <span><b>PM₂.₅:</b> ${fmt(p.pm2_5.valor, 2)} µg/m³</span>
+        <span><b>PM₁₀:</b> ${fmt(p.pm10.valor, 2)} µg/m³</span>
+        <span><b>Categoría ICA:</b> ${esc(a.categoria_ica)}</span>
+        <span><b>Imputación:</b> ${esc(d.tecnico.imputacion)}</span>
+        <span><b>Latencia:</b> ${fmt(d.tecnico.latencia_ms, 0)} ms</span>
+      </div>
+      <p class="tec-simulador__estimadas">Variables estimadas: ${d.entrada.estimadas.map((e) => `${esc(e.etiqueta)} ≈ ${fmt(e.valor, 2)} ${esc(e.unidad)}`).join(" · ") || "ninguna"}</p>`;
     if (estado.benchmark && !$("#vista-modelos").hidden) pintarConfiable();
   }
 

@@ -49,6 +49,27 @@ button, input, select { font: inherit; color: inherit; }
 /* Modo técnico: todo lo marcado .tec solo aparece si se activa */
 .tec { display: none !important; }
 body.modo-tecnico .tec { display: block !important; }
+#tec-simulador.tec { display: block !important; max-height: 0; margin-top: -18px; padding: 0 22px; overflow: hidden; border-color: transparent; opacity: 0; visibility: hidden; transition: all .3s ease; }
+body.modo-tecnico #tec-simulador.tec { max-height: 640px; margin-top: 0; padding: 22px; border-color: var(--borde); opacity: 1; visibility: visible; }
+
+.tec-simulador__cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.tec-simulador__cabecera h3 { margin: 0; font-size: 18px; }
+.tec-simulador__cabecera p { margin: 4px 0 0; color: var(--tinta-2); font-size: 14px; }
+.tec-simulador__chip { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #d5dee8; border-radius: 999px; background: #edf2f7; color: #526174; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.tec-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tec-kpi { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.tec-kpi__etiqueta { color: #64748b; font-size: 12px; font-weight: 650; }
+.tec-kpi strong { color: #1e293b; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.tec-kpi > span:last-child { color: #64748b; font-size: 12px; line-height: 1.4; }
+.tec-simulador__detalle { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; color: var(--tinta-2); font-size: 12.5px; }
+.tec-simulador__detalle b { color: var(--tinta); }
+.tec-simulador__estimadas { margin: 10px 0 0; color: var(--tinta-3); font-size: 12px; }
+@media (max-width: 900px) { .tec-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .tec-kpis { grid-template-columns: 1fr; }
+  .tec-simulador__cabecera { flex-direction: column; }
+  #tec-simulador.tec, body.modo-tecnico #tec-simulador.tec { padding-right: 16px; padding-left: 16px; }
+}
 
 /* ---------- 3. Esqueleto ---------- */
 .app { display: flex; min-height: 100vh; }

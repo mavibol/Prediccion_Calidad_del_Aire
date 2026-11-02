@@ -122,6 +122,8 @@ class PrediccionTests(BaseConModelos):
             "ingresadas": 2, "total": len(cat.VARIABLES), "porcentaje": 22.2,
         })
         self.assertEqual(d["tecnico"]["imputacion"], "iterativa")
+        self.assertEqual(set(d["tecnico"]["algoritmo"]), {"pm2_5", "pm10"})
+        self.assertTrue(all(d["tecnico"]["algoritmo"].values()))
         for clave in ("pm2_5", "pm10"):
             self.assertTrue(d["explicacion"][clave]["verificacion_aditiva"]["ok"])
             self.assertEqual(len(d["explicacion"][clave]["detalle"]), 21)
