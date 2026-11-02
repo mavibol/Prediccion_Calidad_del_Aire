@@ -305,7 +305,8 @@ class ServicioML:
             salida.append({
                 "id": v, **{k: meta[k] for k in ("etiqueta", "nombre_largo", "unidad",
                                                  "descripcion", "umbral_seguro",
-                                                 "fuente_umbral", "grupo")},
+                                                 "fuente_umbral", "grupo",
+                                                 "min_valido", "max_valido")},
                 "tiene_previo": v in TIENE_PREVIO,
                 **{f"simple_{k}": cat.SENCILLO[v][k] for k in ("nombre", "icono", "que_es")},
                 "mediana": round(st["mediana"], 3), "min": round(st["min"], 3),
@@ -338,7 +339,8 @@ class ServicioML:
                 raise ErrorValidacion(f"'{v}' no es una variable válida del dataset.")
             if v in actual:
                 raise ErrorValidacion(f"{cat.VARIABLES[v]['etiqueta']} está repetida.")
-            etq = cat.VARIABLES[v]["etiqueta"]
+            meta = cat.VARIABLES[v]
+            etq = meta["etiqueta"]
             for campo, destino in (("valor", actual), ("valor_previo", previo)):
                 x = _num(it.get(campo))
                 if x is None:
@@ -347,8 +349,11 @@ class ServicioML:
                     continue
                 if campo == "valor_previo" and v not in TIENE_PREVIO:
                     continue  # el modelo no usa el día previo de esta variable
-                if x < 0:
-                    raise ErrorValidacion(f"{etq} no puede ser negativo.")
+                if x < meta["min_valido"] or x > meta["max_valido"]:
+                    raise ErrorValidacion(
+                        f"{etq} debe estar entre {fmt(meta['min_valido'])} y "
+                        f"{fmt(meta['max_valido'])} {meta['unidad']}."
+                    )
                 destino[v] = x
         return actual, previo, avisos
 

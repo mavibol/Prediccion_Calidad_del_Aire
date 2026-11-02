@@ -154,6 +154,9 @@ body.modo-tecnico .tec { display: block !important; }
 .dato__que { font-size: 14px; color: var(--tinta-2); margin: 8px 0 0; padding: 8px 10px; background: var(--superficie-2); border-radius: 10px; }
 .dato__control { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 10px; }
 .dato__num { text-align: left; min-height: 42px; padding: 8px 12px; font-variant-numeric: tabular-nums; }
+.dato__rango, .dato__error { font-size: 12.5px; }
+.dato__rango { color: var(--tinta-2); }
+.dato__error { color: var(--n3); font-weight: 600; }
 .dato__estado { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin-top: 6px; color: var(--tinta-2); }
 .dato__estado i { width: 10px; height: 10px; border-radius: 50%; }
 

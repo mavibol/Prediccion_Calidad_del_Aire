@@ -79,7 +79,7 @@ fetch(CONFIG.api.predecir, {
 
 ## 5-6. Validación en el servidor
 
-`views.api_predecir` comprueba el transporte (POST, `application/json`, JSON bien formado, CSRF) y delega en `ServicioML.validar()`, que rechaza con **HTTP 400** y un mensaje en español: variables fuera del catálogo, repetidas, valores no numéricos, negativos o físicamente implausibles (más de 10 veces el máximo histórico).
+`views.api_predecir` comprueba el transporte (POST, `application/json`, JSON bien formado, CSRF) y delega en `ServicioML.validar()`, que rechaza con **HTTP 400** y un mensaje en español: variables fuera del catálogo, repetidas, valores no numéricos o por fuera de los límites amplios de plausibilidad definidos por variable. Estos límites no derivan del dataset ni son umbrales regulatorios o rangos certificados de instrumentos; el mismo rango se muestra bajo cada campo en el formulario. Los valores dentro del límite pero por encima del histórico se aceptan con un aviso sobre extrapolación.
 
 ## 7. Imputación de las variables que el usuario no dio
 

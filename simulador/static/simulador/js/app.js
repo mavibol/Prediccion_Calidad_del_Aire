@@ -153,7 +153,9 @@
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
         <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
-               value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
+               aria-describedby="dato-rango-${id} dato-error-${id}" value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
+        <small class="dato__rango" id="dato-rango-${id}">Rango de entrada: ${fmt(v.min_valido, d)}–${fmt(v.max_valido, d)} ${esc(v.unidad)}. Límite amplio, independiente del histórico.</small>
+        <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
 
@@ -167,9 +169,17 @@
 
     num.addEventListener("input", () => {
       const x = aNumero(num.value);
-      const malo = x === null || !Number.isFinite(x) || x < 0;
+      const error = x === null || !Number.isFinite(x)
+        ? "Escribe un número válido."
+        : x < v.min_valido || x > v.max_valido
+          ? `El valor debe estar entre ${fmt(v.min_valido, d)} y ${fmt(v.max_valido, d)} ${v.unidad}.`
+          : "";
+      const malo = Boolean(error);
       num.toggleAttribute("aria-invalid", malo);
       num.style.borderColor = malo ? "var(--n3)" : "";
+      const errorEl = $(`#dato-error-${id}`, li);
+      errorEl.textContent = error;
+      errorEl.hidden = !malo;
       if (malo) return;
       pintarEstado(x);
       programarCalculo(500);
@@ -226,8 +236,9 @@
   function leerFormulario() {
     const variables = [];
     for (const [id, li] of estado.filas) {
+      const meta = PORID[id];
       const x = aNumero($(".dato__num", li).value);
-      if (x === null || Number.isNaN(x)) return null; // el campo ya quedó marcado en rojo
+      if (x === null || !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
       variables.push({ variable: id, valor: x });
     }
     return variables.length ? { variables } : null;

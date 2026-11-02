@@ -18,6 +18,9 @@ para que la tesis pueda citarlo en un solo lugar y sea fácil de auditar.
 #   SO2 24 h = 40 µg/m³ · CO 24 h = 4 mg/m³ (4000 µg/m³) · O3 8 h = 100 µg/m³
 # Para AOD, polvo y UV no hay umbral sanitario: se compara con lo habitual
 # (mediana histórica de la ciudad).
+# min_valido/max_valido son límites amplios de plausibilidad para evitar errores
+# de unidad o entradas imposibles; no son límites regulatorios, rangos de sensor
+# ni máximos observados en el dataset.
 VARIABLES = {
     "pm2_5": {
         "etiqueta": "PM₂.₅",
@@ -27,6 +30,7 @@ VARIABLES = {
         "umbral_seguro": 15.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Material particulado",
+        "min_valido": 0.0, "max_valido": 5000.0,
     },
     "pm10": {
         "etiqueta": "PM₁₀",
@@ -36,6 +40,7 @@ VARIABLES = {
         "umbral_seguro": 45.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Material particulado",
+        "min_valido": 0.0, "max_valido": 10000.0,
     },
     "carbon_monoxide": {
         "etiqueta": "CO",
@@ -45,6 +50,7 @@ VARIABLES = {
         "umbral_seguro": 4000.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "min_valido": 0.0, "max_valido": 100000.0,
     },
     "nitrogen_dioxide": {
         "etiqueta": "NO₂",
@@ -54,6 +60,7 @@ VARIABLES = {
         "umbral_seguro": 25.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "min_valido": 0.0, "max_valido": 20000.0,
     },
     "sulphur_dioxide": {
         "etiqueta": "SO₂",
@@ -63,6 +70,7 @@ VARIABLES = {
         "umbral_seguro": 40.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "min_valido": 0.0, "max_valido": 100000.0,
     },
     "ozone": {
         "etiqueta": "O₃",
@@ -72,6 +80,7 @@ VARIABLES = {
         "umbral_seguro": 100.0,
         "fuente_umbral": "guía OMS 2021 (8 h)",
         "grupo": "Gases",
+        "min_valido": 0.0, "max_valido": 5000.0,
     },
     "aerosol_optical_depth": {
         "etiqueta": "AOD",
@@ -81,6 +90,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "min_valido": 0.0, "max_valido": 5.0,
     },
     "dust": {
         "etiqueta": "Polvo",
@@ -90,6 +100,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "min_valido": 0.0, "max_valido": 100000.0,
     },
     "uv_index": {
         "etiqueta": "Índice UV",
@@ -99,6 +110,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "min_valido": 0.0, "max_valido": 50.0,
     },
 }
 

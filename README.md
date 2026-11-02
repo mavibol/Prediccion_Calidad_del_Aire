@@ -6,7 +6,7 @@ Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, pr
 
 | Pantalla | Qué ve el usuario |
 |---|---|
-| **Mi aire** (simulador) | Agrega datos con un selector e introduce sus valores en campos numéricos, sin un tope superior configurado. Todo se recalcula al instante: un fondo sutil cambia de tono según el nivel, un indicador vectorial marca el estado y aparecen 5 consejos de máximo seis palabras (ciclismo, correr, tapabocas, ventilar, niños). Un indicador de precisión sugiere el siguiente dato más útil. |
+| **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un amplio rango de plausibilidad, independiente de los máximos observados en el dataset; el servidor rechaza valores fuera de esos límites. Todo se recalcula al instante: un fondo sutil cambia de tono según el nivel, un indicador vectorial marca el estado y aparecen 5 consejos. |
 | **¿Por qué?** (explicabilidad) | Atribuciones TreeSHAP agrupadas por dirección: aportes que disminuyen el valor predicho y aportes que lo incrementan. Muestra su magnitud en µg/m³, una barra comparativa, el valor base E[f(X)] y la predicción. Las tarjetas giran al tocarlas para explicar cada variable. |
 | **¿Es confiable?** (comparador) | En modo técnico muestra MAE/RMSE de validación y prueba, completitud, método de imputación y un rango predictivo empírico P95 calibrado con validación cronológica. También compara modelos y explica sus límites. |
 

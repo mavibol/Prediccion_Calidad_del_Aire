@@ -99,6 +99,10 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertEqual(por_id["pm10"]["unidad"], "µg/m³")
         self.assertEqual(por_id["pm2_5"]["etiqueta"], "PM₂.₅")
         self.assertEqual(por_id["pm2_5"]["nombre_largo"], "Material particulado fino")
+        self.assertEqual((por_id["pm2_5"]["min_valido"], por_id["pm2_5"]["max_valido"]), (0.0, 5000.0))
+        self.assertEqual((por_id["aerosol_optical_depth"]["min_valido"],
+                          por_id["aerosol_optical_depth"]["max_valido"]), (0.0, 5.0))
+        self.assertEqual((por_id["uv_index"]["min_valido"], por_id["uv_index"]["max_valido"]), (0.0, 50.0))
         self.assertEqual(por_id["nitrogen_dioxide"]["nombre_largo"], "Dióxido de nitrógeno")
         self.assertEqual(por_id["nitrogen_dioxide"]["unidad"], "µg/m³")
         self.assertNotIn("temperature", ids)
@@ -172,11 +176,18 @@ class PrediccionTests(BaseConModelos):
         self.assertTrue(d["avisos"])
 
     def test_acepta_valores_superiores_al_maximo_historico(self):
-        r = self.predecir([{"variable": "pm10", "valor": 99999}])
+        r = self.predecir([{"variable": "pm10", "valor": 9000}])
         self.assertEqual(r.status_code, 200, r.json())
         datos = r.json()
-        self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 99999)
+        self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 9000)
         self.assertTrue(any("menos confiable" in aviso for aviso in datos["avisos"]))
+
+    def test_acepta_limites_superiores_plausibles(self):
+        variables = [{"variable": variable, "valor": meta["max_valido"]}
+                     for variable, meta in cat.VARIABLES.items()]
+        respuesta = self.predecir(variables)
+        self.assertEqual(respuesta.status_code, 200, respuesta.json())
+        self.assertEqual(len(respuesta.json()["entrada"]["ingresadas"]), len(cat.VARIABLES))
 
     def test_errores_de_validacion(self):
         casos = [
@@ -184,6 +195,10 @@ class PrediccionTests(BaseConModelos):
             [{"variable": "us_aqi", "valor": 50}],
             [{"variable": "pm10", "valor": "abc"}],
             [{"variable": "pm10", "valor": -3}],
+            [{"variable": "pm10", "valor": 10000.01}],
+            [{"variable": "uv_index", "valor": 50.01}],
+            [{"variable": "aerosol_optical_depth", "valor": 5.01}],
+            [{"variable": "pm10", "valor": 10, "valor_previo": 10000.01}],
             [{"variable": "pm10", "valor": 10}, {"variable": "pm10", "valor": 12}],
         ]
         for variables in casos:
