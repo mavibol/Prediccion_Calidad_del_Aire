@@ -331,10 +331,9 @@
     const faltante = CATALOGO.find((v) => !estado.filas.has(v.id));
     const completas = d.entrada.completitud;
     $("#precision").innerHTML = `<h3>Datos ingresados</h3>
-      <div class="completitud__valor">${completas.ingresadas} de ${completas.total} variables ingresadas <b>(${fmt(completas.porcentaje, 0)} %)</b></div>
+      <div class="completitud__valor">${completas.ingresadas} de ${completas.total} datos ingresados <b>(${fmt(completas.porcentaje, 0)} %)</b></div>
       <div class="completitud__barra" role="meter" aria-label="Completitud de datos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completas.porcentaje}">
         <span style="width:${completas.porcentaje}%"></span></div>
-      <span class="suave">Cobertura de importancia del modelo: ${fmt(d.cobertura.porcentaje, 1)} %; es una medida ponderada, no el porcentaje de variables ingresadas.</span>
       ${faltante && completas.ingresadas < completas.total ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.etiqueta)} — ${esc(faltante.nombre_largo)}</button>` : ""}`;
     const sug = $(".sugerencia", $("#precision"));
     if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
@@ -342,20 +341,41 @@
     // 5.4 Resumen breve de las atribuciones TreeSHAP
     const s = d.explicacion[a.contaminante].simple;
     const fila = (f, favorable) => f ? `<div class="porque-mini__fila ${favorable ? "porque-mini__fila--favorable" : "porque-mini__fila--desfavorable"}">
-        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${favorable ? "Aporte favorable" : "Aporte desfavorable"} · ${fmtSigno(f.aporte, 1)} µg/m³</small></span></div>` : "";
+        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${favorable ? "🟢 Ayuda a mantener el aire limpio" : "🔴 Puede empeorar la calidad del aire"}</small></span></div>` : "";
     $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.desfavorables[0], false)}${fila(s.favorables[0], true)}
       ${!s.desfavorables.length && !s.favorables.length ? `<p class="suave">No hay aportes individuales relevantes.</p>` : ""}
       <span class="ver-mas">Ver la explicación ${icono("arrowRight", "icon")}</span>`;
 
     // 5.5 Consejos para hoy (máximo seis palabras cada uno)
-    const SELLO = { si: "checkCircle", precaucion: "triangleAlert", no: "x" };
+    const ESTADO_RECOMENDACION = { si: "Recomendado", precaucion: "Con cuidado", no: "Mejor evitar" };
     $("#recomendaciones").innerHTML = d.recomendaciones.map((r) => `
-      <div class="rec rec--${r.estado}" title="${esc(r.texto)}">
-        <span class="rec__sello" aria-label="${r.estado === "si" ? "Sí" : r.estado === "no" ? "No" : "Con cuidado"}">${icono(SELLO[r.estado], "icon")}</span>
-        <div class="rec__ico" aria-hidden="true">${icono(r.icono, "icon")}</div>
-        <div class="rec__tit">${esc(r.etiqueta)}</div>
-        <div class="rec__txt">${esc(r.corto)}</div>
-      </div>`).join("");
+      <button type="button" class="rec rec--${r.estado}"
+              aria-label="${esc(r.etiqueta)}. ${ESTADO_RECOMENDACION[r.estado]}. Pulsa para ver el motivo."
+              data-etiqueta="${esc(r.etiqueta)}" data-estado="${ESTADO_RECOMENDACION[r.estado]}"
+              data-motivo="${esc(r.texto)}"
+              aria-expanded="false">
+        <span class="rec__giro">
+          <span class="rec__cara">
+            <span class="rec__ico" aria-hidden="true">${icono(r.icono, "icon")}</span>
+            <span class="rec__tit">${esc(r.etiqueta)}</span>
+            <span class="rec__txt"><span class="rec__estado">${ESTADO_RECOMENDACION[r.estado]}</span></span>
+          </span>
+          <span class="rec__dorso">
+            <span class="rec__motivo-titulo">¿Por qué?</span>
+            <span class="rec__motivo">${esc(r.texto)}</span>
+            <span class="rec__volver">Toca para volver</span>
+          </span>
+        </span>
+      </button>`).join("");
+    $$(".rec", $("#recomendaciones")).forEach((tarjeta) => {
+      tarjeta.addEventListener("click", () => {
+        const girada = tarjeta.classList.toggle("girada");
+        tarjeta.setAttribute("aria-expanded", String(girada));
+        tarjeta.setAttribute("aria-label", girada
+          ? `Motivo de ${tarjeta.dataset.etiqueta}: ${tarjeta.dataset.motivo}. Pulsa para volver a la recomendación.`
+          : `${tarjeta.dataset.etiqueta}. ${tarjeta.dataset.estado}. Pulsa para ver el motivo.`);
+      });
+    });
 
     // 5.6 Estado compacto para móvil
     const mini = $("#mini-estado");
