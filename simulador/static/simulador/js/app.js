@@ -31,7 +31,7 @@
     const s = String(txt ?? "").trim().replace(/\s/g, "");
     if (s === "") return null;
     const n = s.includes(",") && s.includes(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(",", ".");
-    return /^\d*\.?\d+$/.test(n) ? Number(n) : NaN;
+    return /^-?\d*\.?\d+$/.test(n) ? Number(n) : NaN;
   }
   const decimales = (v) => (v.max < 5 ? 2 : v.max < 100 ? 1 : 0);
   const memoria = {
@@ -152,9 +152,15 @@
       </div>
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
+<<<<<<< HEAD
         <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
                aria-describedby="dato-rango-${id} dato-error-${id}" value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
         <small class="dato__rango" id="dato-rango-${id}">Rango de entrada: ${fmt(v.min_valido, d)}–${fmt(v.max_valido, d)} ${esc(v.unidad)}. Límite amplio, independiente del histórico.</small>
+=======
+        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor exacto de ${esc(v.simple_nombre)}"
+               aria-describedby="dato-error-${id}"
+               value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
+>>>>>>> rama_maira
         <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
@@ -169,6 +175,7 @@
 
     num.addEventListener("input", () => {
       const x = aNumero(num.value);
+<<<<<<< HEAD
       const error = x === null || !Number.isFinite(x)
         ? "Escribe un número válido."
         : x < v.min_valido || x > v.max_valido
@@ -177,10 +184,25 @@
       const malo = Boolean(error);
       num.toggleAttribute("aria-invalid", malo);
       num.style.borderColor = malo ? "var(--n3)" : "";
+=======
+      const error = x === null
+        ? ""
+        : !Number.isFinite(x)
+          ? "Escribe un número válido."
+          : x < 0
+            ? "El valor no puede ser negativo."
+            : x > CONFIG.maximo_valor_entrada
+              ? `El valor no puede superar ${fmt(CONFIG.maximo_valor_entrada, 0)} ${v.unidad}.`
+              : "";
+      const malo = Boolean(error);
+      num.toggleAttribute("aria-invalid", malo);
+      num.style.borderColor = malo ? "var(--ensucia)" : "";
+>>>>>>> rama_maira
       const errorEl = $(`#dato-error-${id}`, li);
       errorEl.textContent = error;
       errorEl.hidden = !malo;
       if (malo) return;
+      if (x === null) return;
       pintarEstado(x);
       programarCalculo(500);
     });
@@ -238,7 +260,11 @@
     for (const [id, li] of estado.filas) {
       const meta = PORID[id];
       const x = aNumero($(".dato__num", li).value);
+<<<<<<< HEAD
       if (x === null || !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
+=======
+      if (x === null || !Number.isFinite(x) || x < 0 || x > CONFIG.maximo_valor_entrada) return null;
+>>>>>>> rama_maira
       variables.push({ variable: id, valor: x });
     }
     return variables.length ? { variables } : null;
