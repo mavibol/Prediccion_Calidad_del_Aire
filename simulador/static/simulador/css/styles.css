@@ -7,23 +7,23 @@
 /* ---------- 1. Tokens ---------- */
 :root {
   color-scheme: light;
-  --plano: #f3f6f4;
+  --plano: #f1f3f4;
   --superficie: #ffffff;
-  --superficie-2: #eef2f0;
-  --tinta: #10201c;
-  --tinta-2: #4b5a56;
-  --tinta-3: #7a8783;
-  --borde: rgba(16, 32, 28, .09);
-  --rejilla: #e1e6e3;
-  --eje: #c9d1cd;
+  --superficie-2: #eceff1;
+  --tinta: #263238;
+  --tinta-2: #526168;
+  --tinta-3: #748187;
+  --borde: rgba(38, 50, 56, .11);
+  --rejilla: #e0e5e8;
+  --eje: #c4cdd1;
   --acento: #1c5cab;
   --acento-suave: #dbe9fb;
   --aporte-desfavorable: #d03b3b;
   --aporte-favorable: #2a78d6;
   --neutro: #b9b7ae;
-  --lateral: #13221f;
-  --lateral-tinta: #dfe9e5;
-  --lateral-activo: #23403a;
+  --lateral: #37474f;
+  --lateral-tinta: #edf2f3;
+  --lateral-activo: #4b6068;
   --sombra: 0 1px 2px rgba(16, 32, 28, .05), 0 8px 24px rgba(16, 32, 28, .06);
   --radio: 20px;
   --ancho-lateral: 230px;
@@ -32,19 +32,6 @@
   /* colores del semáforo (se usan siempre junto a cara + palabra) */
   --n0: #0ca30c; --n1: #f2b005; --n2: #ec835a; --n3: #d03b3b; --n4: #7d3c98;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --plano: #0e1312; --superficie: #18201e; --superficie-2: #212a28;
-    --tinta: #eef3f1; --tinta-2: #bccac5; --tinta-3: #8c9a95;
-    --borde: rgba(255,255,255,.09); --rejilla: #2a3431; --eje: #3a4642;
-    --acento: #6da7ec; --acento-suave: #1d3550;
-    --aporte-desfavorable: #e66767; --aporte-favorable: #4e98ec; --neutro: #5c5b55;
-    --lateral: #0a1412; --lateral-activo: #1d3530;
-    --sombra: 0 1px 2px rgba(0,0,0,.4);
-  }
-}
-
 /* ---------- 2. Base ---------- */
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -69,6 +56,7 @@ body.modo-tecnico .tec { display: block !important; }
   position: sticky; top: 0; height: 100vh; flex: 0 0 var(--ancho-lateral); width: var(--ancho-lateral);
   background: var(--lateral); color: var(--lateral-tinta); display: flex; flex-direction: column;
   padding: 18px 12px; transition: width .25s ease, flex-basis .25s ease; z-index: 30;
+  border-right: 1px solid var(--borde);
 }
 .sidebar__marca { display: flex; align-items: center; gap: 10px; padding: 4px 12px 24px; white-space: nowrap; overflow: hidden; }
 .sidebar__logo { color: #7fd1b9; flex: 0 0 28px; display: grid; }
@@ -84,18 +72,18 @@ body.modo-tecnico .tec { display: block !important; }
 .icon { display: inline-block; width: 1.25em; height: 1.25em; flex: 0 0 auto; vertical-align: middle; }
 .nav-item__icono .icon { width: 22px; height: 22px; }
 .chip .icon, .btn .icon { width: 18px; height: 18px; }
-.nav-item:hover { background: rgba(255,255,255,.07); }
+.nav-item:hover { background: rgba(255,255,255,.08); }
 .nav-item.activo { background: var(--lateral-activo); color: #fff; font-weight: 650; box-shadow: inset 3px 0 0 #7fd1b9; }
 .sidebar__pie { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 12px; font-size: 13px; }
 .sidebar__estado { display: flex; align-items: center; gap: 8px; opacity: .8; white-space: nowrap; overflow: hidden; border: 0; padding: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
 .sidebar__estado:hover { opacity: 1; }
 .punto { width: 8px; height: 8px; border-radius: 50%; background: #f2b005; flex: 0 0 8px; }
 .punto.ok { background: #0ca30c; } .punto.error { background: #d03b3b; }
-.interruptor-tec { display: flex; align-items: center; gap: 10px; cursor: pointer; white-space: nowrap; overflow: hidden; opacity: .8; }
+.interruptor-tec { display: flex; align-items: center; gap: 10px; cursor: pointer; white-space: nowrap; overflow: hidden; opacity: .9; }
 .interruptor-tec input { position: absolute; opacity: 0; }
-.interruptor-tec__pista { flex: 0 0 32px; height: 18px; border-radius: 9px; background: #3a4f4a; position: relative; transition: background .2s; }
+.interruptor-tec__pista { flex: 0 0 32px; height: 18px; border-radius: 9px; background: #71838a; position: relative; transition: background .2s; }
 .interruptor-tec__pista::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
-.interruptor-tec input:checked + .interruptor-tec__pista { background: #7fd1b9; }
+.interruptor-tec input:checked + .interruptor-tec__pista { background: #4b9b80; }
 .interruptor-tec input:checked + .interruptor-tec__pista::after { transform: translateX(14px); }
 .interruptor-tec input:focus-visible + .interruptor-tec__pista { outline: 2px solid #7fd1b9; outline-offset: 2px; }
 
