@@ -431,34 +431,25 @@
   }
 
   /* -----------------------------------------------------------------
-     PASO 6 · ¿Por qué? — dirección y magnitud de los aportes TreeSHAP
+     PASO 6 · ¿Por qué? — factores explicados en lenguaje cotidiano
      ----------------------------------------------------------------- */
-  function tarjetaFactor(f, maxAporte) {
-    const favorable = f.aporte < 0;
-    const color = favorable ? "var(--aporte-favorable)" : "var(--aporte-desfavorable)";
+  function tarjetaFactor(f, maxAporte, favorable) {
     const ancho = Math.max(2, Math.abs(f.aporte) / maxAporte * 100);
-    const d = f.valor < 5 ? 2 : 1;
-    return `<button type="button" class="factor ${f.origen === "estimada" ? "factor--estimada" : ""}" style="--color:${color}"
-              aria-label="${esc(f.nombre)}: ${favorable ? "aporte favorable, disminuye el valor predicho" : "aporte desfavorable, incrementa el valor predicho"} en ${fmtSigno(f.aporte, 1)} microgramos por metro cúbico. Toca para saber más.">
-      <span class="factor__giro">
-        <span class="factor__cara">
-          <span class="factor__fila">
-            <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
-            <span class="factor__texto"><span class="factor__nombre">${esc(f.nombre)}</span><small class="factor__comun">${esc(f.nombre_comun)}</small></span>
-          </span>
-          <span class="aporte__valor">${fmtSigno(f.aporte, 1)} µg/m³</span>
-          <span class="aporte__pista" aria-hidden="true"><span style="width:${ancho}%"></span></span>
-          <span class="aporte__direccion">${favorable ? "Disminuye el índice predicho (Aporte favorable)" : "Incrementa el nivel de contaminación (Aporte desfavorable)"}</span>
-          ${f.origen === "estimada" ? `<span class="factor__pista">No lo diste: lo calculamos por ti</span>` : ""}
-        </span>
-        <span class="factor__dorso">
-          <b>${icono(f.icono, "icon")} ${esc(f.nombre)}</b>
-          <small class="factor__comun">${esc(f.nombre_comun)}</small>
-          <span>${esc(f.que_es)}</span>
-          <span class="suave">Valor usado: ${fmt(f.valor, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
-          <span class="aporte__valor">${fmtSigno(f.aporte, 1)} µg/m³</span>
-        </span>
-      </span></button>`;
+    const unidad = f.unidad === "adim." || f.unidad === "índice" ? "" : ` ${esc(f.unidad)}`;
+    const decimalesValor = f.valor < 5 ? 2 : 1;
+    const direccion = favorable ? "ayuda a limpiar el aire" : "aumenta la contaminación";
+    return `<article class="factor ${favorable ? "factor--favorable" : "factor--desfavorable"} ${f.origen === "estimada" ? "factor--estimada" : ""}"
+              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${direccion}.">
+      <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
+      <span class="factor__nombre">${esc(f.nombre_comun)}</span>
+      <span class="factor__variable">${esc(f.etiqueta)}</span>
+      <span class="factor__valor-etiqueta">${f.origen === "estimada" ? "Valor estimado" : "Valor medido"}</span>
+      <strong class="factor__valor">${fmt(f.valor, decimalesValor)}${unidad}</strong>
+      <span class="aporte__pista" role="img" aria-label="Nivel de influencia: ${direccion}">
+        <span style="width:${ancho}%"></span>
+      </span>
+      ${f.origen === "estimada" ? `<span class="factor__estimada">Estimado automáticamente</span>` : "" }
+    </article>`;
   }
 
   function pintarPorque() {
@@ -466,22 +457,35 @@
     $("#xai-vacio").hidden = !!d;
     $("#xai-contenido").hidden = !d;
     if (!d) return;
-    const a = d.alerta, s = d.explicacion[a.contaminante].simple;
-
-    const e = d.explicacion[a.contaminante];
+    const a = d.alerta, e = d.explicacion[a.contaminante], s = e.simple;
     const relevantes = [...s.favorables, ...s.desfavorables];
     const maxAporte = Math.max(...relevantes.map((f) => Math.abs(f.aporte)), 0.01);
-    $("#xai-frase").textContent = s.frase;
+    const objetivo = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
+    const saludables = a.orden === 0;
+    const factoresClave = (a.orden < 2 ? s.favorables : s.desfavorables)
+      .slice(0, 2)
+      .map((f) => f.nombre_comun);
+    const influencia = factoresClave.length
+      ? `${a.orden < 2 ? "Ayudan especialmente" : "Influyen especialmente"} ${factoresClave.join(" y ")}.`
+      : "El resultado combina los datos ingresados y los estimados automáticamente.";
+    const estadoHumano = saludables
+      ? "se mantiene en niveles saludables"
+      : a.orden === 1
+        ? "se mantiene en un nivel aceptable para la mayoría"
+        : a.orden === 2
+          ? "requiere precaución para las personas sensibles"
+          : "puede afectar la salud; conviene limitar las actividades al aire libre";
+    $("#xai-frase").textContent = `El pronóstico de ${objetivo} (${fmt(e.prediccion, 1)} µg/m³) ${estadoHumano}. ${influencia}`;
     $("#xai-resumen-base").innerHTML = `Valor base E[f(X)]: <b>${fmt(e.valor_base, 2)} µg/m³</b>
       <span aria-hidden="true">+</span> aportes TreeSHAP = valor predicho <b>${fmt(e.prediccion, 2)} µg/m³</b>`;
 
-    $("#col-favorables").innerHTML = s.favorables.length ? s.favorables.map((f) => tarjetaFactor(f, maxAporte)).join("")
+    $("#col-favorables").innerHTML = s.favorables.length ? s.favorables.map((f) => tarjetaFactor(f, maxAporte, true)).join("")
       : `<div class="columna__vacia">Sin aportes favorables relevantes</div>`;
-    $("#col-desfavorables").innerHTML = s.desfavorables.length ? s.desfavorables.map((f) => tarjetaFactor(f, maxAporte)).join("")
+    $("#col-desfavorables").innerHTML = s.desfavorables.length ? s.desfavorables.map((f) => tarjetaFactor(f, maxAporte, false)).join("")
       : `<div class="columna__vacia">Sin aportes desfavorables relevantes</div>`;
-    $$(".factor").forEach((b) => b.addEventListener("click", () => b.classList.toggle("girada")));
-    $("#xai-nota").textContent = "Las barras comparan la magnitud absoluta de los aportes mostrados." +
-      (s.hay_estimadas ? " Las tarjetas punteadas son datos que no diste: los calculamos por ti." : "");
+    $("#xai-nota").textContent = s.hay_estimadas
+      ? "Los datos con la etiqueta «Estimado automáticamente» se completaron porque no fueron ingresados."
+      : "";
 
     // Modo técnico: SHAP por variable para PM2.5 o PM10
     $$("#xai-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.objetivo === estado.objetivoTec)));

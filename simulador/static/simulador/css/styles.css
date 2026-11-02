@@ -50,7 +50,7 @@ button, input, select { font: inherit; color: inherit; }
 .tec { display: none !important; }
 body.modo-tecnico .tec { display: block !important; }
 #tec-simulador.tec { display: block !important; max-height: 0; margin-top: -18px; padding: 0 22px; overflow: hidden; border-color: transparent; opacity: 0; visibility: hidden; transition: all .3s ease; }
-body.modo-tecnico #tec-simulador.tec { max-height: 640px; margin-top: 0; padding: 22px; border-color: var(--borde); opacity: 1; visibility: visible; }
+body.modo-tecnico #tec-simulador.tec { max-height: 1200px; margin-top: 0; padding: 22px; border-color: var(--borde); opacity: 1; visibility: visible; }
 
 .tec-simulador__cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .tec-simulador__cabecera h3 { margin: 0; font-size: 18px; }
@@ -273,38 +273,36 @@ body.modo-tecnico #tec-simulador.tec { max-height: 640px; margin-top: 0; padding
 .vacio-grande__ico { display: block; color: var(--acento); }
 .vacio-grande__ico .icon { width: 50px; height: 50px; }
 .vacio-grande p { font-size: 18px; color: var(--tinta-2); }
-.frase-grande { font-size: clamp(20px, 2.4vw, 26px); font-weight: 650; line-height: 1.35; margin: 0 0 20px; max-width: 900px; }
+.xai-cabecera { margin: 0 0 22px; }
+.xai-cabecera__titulo { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.025em; }
+.frase-grande { font-size: clamp(17px, 2vw, 20px); font-weight: 450; line-height: 1.5; margin: 8px 0 0; max-width: 900px; color: var(--tinta-2); }
 .tira { padding: 24px; }
 .xai-metodologia { margin: 0 0 8px; color: var(--tinta-2); font-size: 14px; }
 .xai-resumen-base { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0 0 20px; font-size: 15px; }
 .tira__columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 @media (max-width: 640px) { .tira__columnas { grid-template-columns: 1fr; } }
 .columna-xai { min-width: 0; }
-.aporte-favorable__titulo, .aporte-desfavorable__titulo { font-size: 16px; margin-bottom: 10px; }
+.aporte-favorable__titulo, .aporte-desfavorable__titulo { font-size: 17px; line-height: 1.35; margin-bottom: 12px; }
 .aporte-favorable__titulo { color: var(--aporte-favorable); }
 .aporte-desfavorable__titulo { color: var(--aporte-desfavorable); }
-.aporte-favorable__titulo span, .aporte-desfavorable__titulo span { display: block; font-size: 13px; font-weight: 500; color: var(--tinta-2); }
 .columna { display: flex; flex-direction: column; gap: 12px; }
 .columna__vacia { color: var(--tinta-3); text-align: center; padding: 18px; border: 1px dashed var(--eje); border-radius: 16px; font-size: 15px; }
 
-/* Tarjeta de factor que gira al tocarla */
-.factor { perspective: 900px; border: 0; padding: 0; background: none; text-align: left; cursor: pointer; width: 100%; animation: entrar .35s ease both; }
-.factor:nth-child(2) { animation-delay: .08s; } .factor:nth-child(3) { animation-delay: .16s; }
-.factor__giro { position: relative; display: grid; transition: transform .5s ease; transform-style: preserve-3d; }
-.factor.girada .factor__giro { transform: rotateY(180deg); }
-.factor__cara, .factor__dorso { grid-area: 1 / 1; backface-visibility: hidden; border-radius: 18px; padding: 14px 16px; min-height: 96px; background: var(--superficie); border: 2px solid var(--color); }
-.factor__dorso { transform: rotateY(180deg); background: var(--superficie-2); font-size: 14.5px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-.factor--estimada .factor__cara { border-style: dashed; }
-.factor__fila { display: flex; align-items: center; gap: 12px; }
-.factor__ico .icon { width: 34px; height: 34px; }
-.factor__texto { min-width: 0; }
-.factor__nombre { font-weight: 700; font-size: 16.5px; }
-.factor__nombre + .factor__comun { display: block; }
-.aporte__valor { display: block; color: var(--color); font-weight: 750; font-variant-numeric: tabular-nums; margin-top: 8px; }
-.aporte__pista { display: block; height: 7px; background: var(--superficie-2); border-radius: 99px; overflow: hidden; margin-top: 6px; }
-.aporte__pista > span { display: block; height: 100%; background: var(--color); border-radius: inherit; }
-.aporte__direccion { display: block; margin-top: 6px; color: var(--tinta-2); font-size: 13px; }
-.factor__pista { font-size: 12px; color: var(--tinta-3); margin-top: 6px; }
+/* Factores de explicabilidad en lenguaje cotidiano */
+.factor { display: grid; grid-template-columns: 38px minmax(0, 1fr); grid-template-areas: "icon name" "icon variable" "value-label value" "bar bar" "estimated estimated"; align-items: center; column-gap: 10px; row-gap: 3px; width: 100%; padding: 14px; border: 1px solid var(--borde); border-left: 3px solid var(--aporte-favorable); border-radius: 14px; background: var(--superficie); animation: entrar .3s ease both; }
+.factor--desfavorable { border-left-color: var(--aporte-desfavorable); }
+.factor__ico { grid-area: icon; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--superficie-2); color: var(--aporte-favorable); }
+.factor--desfavorable .factor__ico { color: var(--aporte-desfavorable); }
+.factor__ico .icon { width: 26px; height: 26px; }
+.factor__nombre { grid-area: name; color: var(--tinta); font-size: 17px; font-weight: 700; line-height: 1.25; }
+.factor__variable { grid-area: variable; color: var(--tinta-2); font-size: 13px; }
+.factor__valor-etiqueta { grid-area: value-label; margin-top: 8px; color: var(--tinta-2); font-size: 12px; }
+.factor__valor { grid-area: value; justify-self: end; margin-top: 8px; color: var(--tinta); font-size: 16px; font-variant-numeric: tabular-nums; }
+.aporte__pista { grid-area: bar; display: block; height: 7px; margin-top: 7px; overflow: hidden; border-radius: 99px; background: var(--superficie-2); }
+.aporte__pista > span { display: block; height: 100%; border-radius: inherit; background: var(--aporte-favorable); }
+.factor--desfavorable .aporte__pista > span { background: var(--aporte-desfavorable); }
+.factor__estimada { grid-area: estimated; justify-self: start; margin-top: 6px; padding: 3px 8px; border: 1px dashed var(--eje); border-radius: 999px; color: var(--tinta-2); font-size: 11px; }
+.xai-nota { font-size: 13px; }
 
 /* ---------- 7. ¿Es confiable? ---------- */
 .rejilla-conf { display: grid; grid-template-columns: minmax(300px, 1.1fr) 1fr; gap: 22px; align-items: start; }

@@ -126,30 +126,33 @@
     </section>
 
     <!-- ---------- VISTA 2: ¿POR QUÉ? ---------- -->
-    <section class="vista" id="vista-explicabilidad" hidden data-titulo="¿Por qué?" data-sub="Cómo contribuye cada variable al valor de contaminación predicho.">
+    <section class="vista" id="vista-explicabilidad" hidden data-titulo="¿Por qué?" data-sub="Descubre qué factores influyen en el pronóstico de mañana.">
       <div class="tarjeta vacio-grande" id="xai-vacio">
         <span class="vacio-grande__ico" data-icon="search" aria-hidden="true"></span>
         <p>Primero agrega algún dato en <b>Mi aire</b>.</p>
         <a class="btn btn--primario" href="#simulador">Ir a Mi aire</a>
       </div>
       <div id="xai-contenido" hidden>
-        <p class="frase-grande" id="xai-frase"></p>
+        <header class="xai-cabecera">
+          <h2 class="xai-cabecera__titulo">¿Qué influye en el pronóstico de mañana?</h2>
+          <p class="frase-grande" id="xai-frase"></p>
+        </header>
         <div class="tarjeta tira">
-          <p class="xai-metodologia" title="Atribución calculada mediante TreeSHAP (SHapley Additive exPlanations) respecto al valor base E[f(X)].">
+          <p class="xai-metodologia tec" title="Atribución calculada mediante TreeSHAP (SHapley Additive exPlanations) respecto al valor base E[f(X)].">
             Atribución calculada mediante <strong>TreeSHAP</strong> (SHapley Additive exPlanations) respecto al valor base E[f(X)].
           </p>
-          <p class="xai-resumen-base" id="xai-resumen-base"></p>
+          <p class="xai-resumen-base tec" id="xai-resumen-base"></p>
           <div class="tira__columnas">
             <section class="columna-xai">
-              <h3 class="aporte-favorable__titulo">Disminuye el índice predicho <span>(Aporte favorable)</span></h3>
+              <h3 class="aporte-favorable__titulo">🟢 Factores que ayudan a limpiar el aire</h3>
               <div class="columna" id="col-favorables"></div>
             </section>
             <section class="columna-xai">
-              <h3 class="aporte-desfavorable__titulo">Incrementa el nivel de contaminación <span>(Aporte desfavorable)</span></h3>
+              <h3 class="aporte-desfavorable__titulo">🔴 Factores que aumentan la contaminación</h3>
               <div class="columna" id="col-desfavorables"></div>
             </section>
           </div>
-          <p class="suave centro" id="xai-nota"></p>
+          <p class="suave centro xai-nota" id="xai-nota"></p>
         </div>
 
         <div class="tarjeta tec">
