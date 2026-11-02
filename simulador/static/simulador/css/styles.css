@@ -147,6 +147,7 @@ body.modo-tecnico .tec { display: block !important; }
 .dato__ico { font-size: 26px; line-height: 1; }
 .dato__nombre { flex: 1; font-weight: 650; }
 .dato__nombre small { display: block; font-weight: 400; color: var(--tinta-3); font-size: 12.5px; }
+.dato__nombre .dato__alias, .factor__comun { color: var(--tinta-3); font-size: 12.5px; font-weight: 400; }
 .dato__info, .dato__quitar { border: 0; background: var(--superficie-2); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; color: var(--tinta-2); display: grid; place-items: center; font-size: 15px; }
 .dato__quitar:hover { background: rgba(208,59,59,.12); color: var(--ensucia); }
 .dato__que { font-size: 14px; color: var(--tinta-2); margin: 8px 0 0; padding: 8px 10px; background: var(--superficie-2); border-radius: 10px; }
@@ -210,6 +211,7 @@ body.modo-tecnico .tec { display: block !important; }
 .porque-mini:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16,32,28,.1); }
 .porque-mini__fila { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 15px; }
 .porque-mini__fila b { display: grid; place-items: center; }
+.porque-mini__fila .factor__comun { display: block; }
 .porque-mini__ensucia, .porque-mini__limpia { display: inline-flex; align-items: center; gap: 2px; }
 .porque-mini__ensucia { color: var(--ensucia); }
 .porque-mini__limpia { color: var(--limpia); }
@@ -263,6 +265,7 @@ body.modo-tecnico .tec { display: block !important; }
 .factor__fila { display: flex; align-items: center; gap: 12px; }
 .factor__ico .icon { width: 34px; height: 34px; }
 .factor__nombre { font-weight: 700; font-size: 16.5px; }
+.factor__nombre + .factor__comun { display: block; }
 .factor__estado { font-size: 13.5px; color: var(--tinta-2); }
 .factor__fuerza { display: flex; gap: 2px; margin-left: auto; color: var(--color); white-space: nowrap; }
 .factor__fuerza .icon { width: 17px; height: 17px; }

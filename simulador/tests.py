@@ -87,6 +87,17 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertEqual(ids, set(cat.VARIABLES))
         self.assertNotIn("us_aqi", ids)
         self.assertNotIn("european_aqi", ids)
+        por_id = {v["id"]: v for v in datos["variables"]}
+        self.assertEqual(por_id["pm10"]["etiqueta"], "PM₁₀")
+        self.assertEqual(por_id["pm10"]["nombre_largo"], "Material particulado grueso")
+        self.assertEqual(por_id["pm10"]["unidad"], "µg/m³")
+        self.assertEqual(por_id["pm2_5"]["etiqueta"], "PM₂.₅")
+        self.assertEqual(por_id["pm2_5"]["nombre_largo"], "Material particulado fino")
+        self.assertEqual(por_id["nitrogen_dioxide"]["nombre_largo"], "Dióxido de nitrógeno")
+        self.assertEqual(por_id["nitrogen_dioxide"]["unidad"], "µg/m³")
+        self.assertNotIn("temperature", ids)
+        self.assertNotIn("relative_humidity", ids)
+        self.assertNotIn("wind_speed", ids)
 
 
 class PrediccionTests(BaseConModelos):

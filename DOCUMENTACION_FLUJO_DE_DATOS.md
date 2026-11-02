@@ -32,7 +32,9 @@ Al cargar la página, la vista `inicio` llama a `ServicioML.catalogo_publico()` 
 <script id="catalogo-variables" type="application/json">[{"id": "pm10", "etiqueta": "PM10", "importancia": 1.0, "mediana": 16.8, ...}, ...]</script>
 ```
 
-Solo contiene las **9 variables predictoras del dataset** (PM2.5, PM10, CO, NO₂, SO₂, O₃, AOD, polvo, UV). `us_aqi` y `european_aqi` están en el CSV pero se excluyen: son índices calculados a partir del mismo material particulado y no son entradas del modelo.
+Solo contiene las **9 variables predictoras del dataset** (PM₂.₅, PM₁₀, CO, NO₂, SO₂, O₃, AOD, polvo y UV). `us_aqi` y `european_aqi` están en el CSV pero se excluyen: son índices calculados a partir del mismo material particulado y no son entradas del modelo. El dataset/modelo actual no contiene temperatura, humedad relativa, radiación solar ni velocidad del viento; por eso no se muestran como entradas.
+
+El formulario presenta primero la nomenclatura formal y la unidad del dataset. En particular, NO₂ se conserva en µg/m³ tal como está almacenado; no se etiqueta como ppb ni se convierte sin información de temperatura y presión. El nombre común y la explicación permanecen como texto secundario y ayuda.
 
 Cada variable trae sus estadísticas de entrenamiento (mediana, P10, P90, máximo), su umbral sanitario de la OMS cuando existe y su **importancia global** (|SHAP| medio), que se comunica como texto en el selector para orientar al usuario hacia las variables que más información aportan. Las variables y estados usan iconos SVG locales.
 

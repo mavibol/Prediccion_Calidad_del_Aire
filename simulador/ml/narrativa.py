@@ -6,6 +6,8 @@ interfaz muestra al lado (valor ingresado, umbral, aporte en µg/m³).
 """
 from __future__ import annotations
 
+from .catalogo import VARIABLES
+
 
 def fmt(x: float, dec: int = 1) -> str:
     """Formato colombiano: coma decimal y punto de miles."""
@@ -161,7 +163,10 @@ def explicacion_simple(contribs: list[dict], pred: float, base: float,
             estado, texto = None, None
         rel = abs(c["aporte"]) / tope
         s = sencillo[c["variable"]]
-        return {"variable": c["variable"], "nombre": s["nombre"], "icono": s["icono"],
+        meta = VARIABLES[c["variable"]]
+        return {"variable": c["variable"],
+                "nombre": f"{meta['etiqueta']} — {meta['nombre_largo']}",
+                "nombre_comun": s["nombre"], "icono": s["icono"],
                 "que_es": s["que_es"], "etiqueta": c["etiqueta"], "unidad": c["unidad"],
                 "valor": c["valor"], "normal": stats[c["variable"]]["mediana"],
                 "origen": c["origen"], "estado": estado, "estado_txt": texto,

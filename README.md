@@ -12,6 +12,8 @@ Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, pr
 
 El interruptor **Modo técnico** (pie del menú) muestra para evaluadores las cifras en µg/m³, el gráfico SHAP por variable, la comprobación aditiva y la tabla completa de métricas.
 
+El formulario usa nomenclatura formal (por ejemplo, PM₁₀ y PM₂.₅) y las unidades del dataset. Solo ofrece las nueve variables que realmente alimentan al modelo; temperatura, humedad relativa, radiación solar y velocidad del viento no forman parte del dataset/modelo actual.
+
 ## Puesta en marcha
 
 ```bash

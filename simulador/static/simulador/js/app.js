@@ -121,7 +121,7 @@
   function poblarSelector() {
     const libres = CATALOGO.filter((v) => !estado.filas.has(v.id));
     selector.innerHTML = libres.length
-      ? libres.map((v) => `<option value="${v.id}">${esc(v.simple_nombre)}${v.estrellas === 3 ? " (más relevante)" : ""}</option>`).join("")
+      ? libres.map((v) => `<option value="${v.id}">${esc(v.etiqueta)} — ${esc(v.nombre_largo)} (${esc(v.unidad)})${v.estrellas === 3 ? " (más relevante)" : ""}</option>`).join("")
       : `<option value="">Ya agregaste todos los datos</option>`;
     selector.disabled = $("#btn-agregar").disabled = !libres.length;
     $("#btn-limpiar").hidden = estado.filas.size === 0;
@@ -145,13 +145,13 @@
     li.innerHTML = `
       <div class="dato__cab">
         <span class="dato__ico" aria-hidden="true">${icono(v.simple_icono, "icon")}</span>
-        <span class="dato__nombre">${esc(v.simple_nombre)}<small>${esc(v.etiqueta)} · ${esc(v.unidad)}</small></span>
-        <button type="button" class="dato__info" aria-label="¿Qué es ${esc(v.simple_nombre)}?" aria-expanded="false">?</button>
-        <button type="button" class="dato__quitar" aria-label="Quitar ${esc(v.simple_nombre)}">${icono("x", "icon")}</button>
+        <span class="dato__nombre">${esc(v.etiqueta)} — ${esc(v.nombre_largo)}<small>Unidad: ${esc(v.unidad)}</small><small class="dato__alias">Nombre común: ${esc(v.simple_nombre)}</small></span>
+        <button type="button" class="dato__info" aria-label="Más información sobre ${esc(v.etiqueta)}" aria-expanded="false">i</button>
+        <button type="button" class="dato__quitar" aria-label="Quitar ${esc(v.etiqueta)}">${icono("x", "icon")}</button>
       </div>
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
-        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor exacto de ${esc(v.simple_nombre)}"
+        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
                value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
@@ -301,14 +301,14 @@
     $("#precision").innerHTML = `<h3>Precisión</h3>
       <div class="precision__puntos" aria-label="${pts} de 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= pts ? "lleno" : ""}"></i>`).join("")}</div>
       <span class="suave">${pts >= 4 ? "¡Muy bien! Tienes casi todos los datos importantes." : "Agrega más datos para afinar el resultado."}</span>
-      ${faltante && pts < 5 ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.simple_nombre)}</button>` : ""}`;
+      ${faltante && pts < 5 ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.etiqueta)} — ${esc(faltante.nombre_largo)}</button>` : ""}`;
     const sug = $(".sugerencia", $("#precision"));
     if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
 
     // 5.4 Avance del «¿por qué?»: lo que más ensucia y lo que más ayuda
     const s = d.explicacion[a.contaminante].simple;
     const fila = (f, tipo) => f ? `<div class="porque-mini__fila"><b aria-hidden="true">${icono(f.icono, "icon")}</b>
-        <span><strong>${esc(f.nombre)}</strong> ${tipo === "e" ? `<span class="porque-mini__ensucia">${icono("arrowUp", "icon")} ensucia</span>` : `<span class="porque-mini__limpia">${icono("arrowDown", "icon")} limpia</span>`}</span></div>` : "";
+        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${esc(f.nombre_comun)}</small> ${tipo === "e" ? `<span class="porque-mini__ensucia">${icono("arrowUp", "icon")} ensucia</span>` : `<span class="porque-mini__limpia">${icono("arrowDown", "icon")} limpia</span>`}</span></div>` : "";
     $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.empeoran[0], "e")}${fila(s.ayudan[0], "a")}
       ${!s.empeoran.length && !s.ayudan.length ? `<p class="suave">Todo está dentro de lo normal.</p>` : ""}
       <span class="ver-mas">Ver la explicación ${icono("arrowRight", "icon")}</span>`;
@@ -355,7 +355,7 @@
         <span class="factor__cara">
           <span class="factor__fila">
             <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
-            <span><span class="factor__nombre">${esc(f.nombre)}</span><br>
+            <span><span class="factor__nombre">${esc(f.nombre)}</span><small class="factor__comun">${esc(f.nombre_comun)}</small>
               <span class="factor__estado">${f.estado_txt ? esc(f.estado_txt[0].toUpperCase() + f.estado_txt.slice(1)) : tipo === "e" ? "Sube el riesgo" : "Baja el riesgo"}</span></span>
             <span class="factor__fuerza" aria-hidden="true">${fuerza}</span>
           </span>
@@ -363,6 +363,7 @@
         </span>
         <span class="factor__dorso">
           <b>${icono(f.icono, "icon")} ${esc(f.nombre)}</b>
+          <small class="factor__comun">${esc(f.nombre_comun)}</small>
           <span>${esc(f.que_es)}</span>
           <span class="suave">Valor usado: ${fmt(f.valor, d)} · normal: ${fmt(f.normal, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
         </span>

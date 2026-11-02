@@ -20,8 +20,8 @@ para que la tesis pueda citarlo en un solo lugar y sea fácil de auditar.
 # (mediana histórica de la ciudad).
 VARIABLES = {
     "pm2_5": {
-        "etiqueta": "PM2.5",
-        "nombre_largo": "Material particulado fino (PM2.5)",
+        "etiqueta": "PM₂.₅",
+        "nombre_largo": "Material particulado fino",
         "unidad": "µg/m³",
         "descripcion": "Partículas menores a 2,5 micras; penetran hasta los alvéolos.",
         "umbral_seguro": 15.0,
@@ -29,8 +29,8 @@ VARIABLES = {
         "grupo": "Material particulado",
     },
     "pm10": {
-        "etiqueta": "PM10",
-        "nombre_largo": "Material particulado grueso (PM10)",
+        "etiqueta": "PM₁₀",
+        "nombre_largo": "Material particulado grueso",
         "unidad": "µg/m³",
         "descripcion": "Partículas menores a 10 micras (polvo, hollín, polen).",
         "umbral_seguro": 45.0,
@@ -39,7 +39,7 @@ VARIABLES = {
     },
     "carbon_monoxide": {
         "etiqueta": "CO",
-        "nombre_largo": "Monóxido de carbono (CO)",
+        "nombre_largo": "Monóxido de carbono",
         "unidad": "µg/m³",
         "descripcion": "Gas de combustión incompleta (tráfico, quemas).",
         "umbral_seguro": 4000.0,
@@ -48,7 +48,7 @@ VARIABLES = {
     },
     "nitrogen_dioxide": {
         "etiqueta": "NO₂",
-        "nombre_largo": "Dióxido de nitrógeno (NO₂)",
+        "nombre_largo": "Dióxido de nitrógeno",
         "unidad": "µg/m³",
         "descripcion": "Gas asociado al tráfico vehicular.",
         "umbral_seguro": 25.0,
@@ -57,7 +57,7 @@ VARIABLES = {
     },
     "sulphur_dioxide": {
         "etiqueta": "SO₂",
-        "nombre_largo": "Dióxido de azufre (SO₂)",
+        "nombre_largo": "Dióxido de azufre",
         "unidad": "µg/m³",
         "descripcion": "Gas de combustibles con azufre (diésel, industria).",
         "umbral_seguro": 40.0,
@@ -66,7 +66,7 @@ VARIABLES = {
     },
     "ozone": {
         "etiqueta": "O₃",
-        "nombre_largo": "Ozono troposférico (O₃)",
+        "nombre_largo": "Ozono troposférico",
         "unidad": "µg/m³",
         "descripcion": "Contaminante secundario que se forma con la luz solar.",
         "umbral_seguro": 100.0,
@@ -84,7 +84,7 @@ VARIABLES = {
     },
     "dust": {
         "etiqueta": "Polvo",
-        "nombre_largo": "Polvo mineral en suspensión",
+        "nombre_largo": "Material particulado mineral",
         "unidad": "µg/m³",
         "descripcion": "Polvo transportado (p. ej., episodios del Sahara).",
         "umbral_seguro": None,
@@ -93,7 +93,7 @@ VARIABLES = {
     },
     "uv_index": {
         "etiqueta": "Índice UV",
-        "nombre_largo": "Índice ultravioleta",
+        "nombre_largo": "Índice de radiación ultravioleta",
         "unidad": "índice",
         "descripcion": "Radiación UV; impulsa la química del ozono.",
         "umbral_seguro": None,
@@ -125,8 +125,8 @@ TRANSFORMACIONES = ("lag1", "lag2", "ma3", "delta")
 
 # Objetivos del escenario A (pronóstico a 24 h)
 OBJETIVOS = {
-    "pm2_5": {"etiqueta": "PM2.5", "archivo": "modelo_pm2_5_XGBoost.joblib"},
-    "pm10": {"etiqueta": "PM10", "archivo": "modelo_pm10_XGBoost.joblib"},
+    "pm2_5": {"etiqueta": "PM₂.₅", "archivo": "modelo_pm2_5_XGBoost.joblib"},
+    "pm10": {"etiqueta": "PM₁₀", "archivo": "modelo_pm10_XGBoost.joblib"},
 }
 
 # ---------------------------------------------------------------------------
