@@ -130,7 +130,7 @@
     const maxAbs = Math.max(...items.map((i) => Math.abs(i.valor)), 0.01);
     const x = (v) => colEtq + 10 + ((v + maxAbs) / (2 * maxAbs)) * (W - colEtq - 80);
     const css = getComputedStyle(document.documentElement);
-    const cSube = css.getPropertyValue("--ensucia").trim(), cBaja = css.getPropertyValue("--limpia").trim();
+    const cSube = css.getPropertyValue("--aporte-desfavorable").trim(), cBaja = css.getPropertyValue("--aporte-favorable").trim();
     [-maxAbs, maxAbs].forEach((v) => texto(svg, x(v), H - 6, fmtSigno(v, 1), { "text-anchor": "middle", class: "t-tenue" }));
     items.forEach((it, i) => {
       const y = 6 + i * fila;

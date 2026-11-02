@@ -126,7 +126,7 @@
     </section>
 
     <!-- ---------- VISTA 2: ¿POR QUÉ? ---------- -->
-    <section class="vista" id="vista-explicabilidad" hidden data-titulo="¿Por qué?" data-sub="Qué ensucia el aire y qué lo ayuda a mantenerse limpio.">
+    <section class="vista" id="vista-explicabilidad" hidden data-titulo="¿Por qué?" data-sub="Cómo contribuye cada variable al valor de contaminación predicho.">
       <div class="tarjeta vacio-grande" id="xai-vacio">
         <span class="vacio-grande__ico" data-icon="search" aria-hidden="true"></span>
         <p>Primero agrega algún dato en <b>Mi aire</b>.</p>
@@ -135,11 +135,19 @@
       <div id="xai-contenido" hidden>
         <p class="frase-grande" id="xai-frase"></p>
         <div class="tarjeta tira">
-          <div class="tira__lados"><span class="tira__lado tira__lado--ayuda"><span data-icon="heart" aria-hidden="true"></span> Limpian el aire</span><span class="tira__lado tira__lado--ensucia">Ensucian el aire <span data-icon="heart" aria-hidden="true"></span></span></div>
-          <div class="cuerda" aria-hidden="true"><span class="cuerda__linea"></span><span class="cuerda__nudo" id="nudo"></span></div>
+          <p class="xai-metodologia" title="Atribución calculada mediante TreeSHAP (SHapley Additive exPlanations) respecto al valor base E[f(X)].">
+            Atribución calculada mediante <strong>TreeSHAP</strong> (SHapley Additive exPlanations) respecto al valor base E[f(X)].
+          </p>
+          <p class="xai-resumen-base" id="xai-resumen-base"></p>
           <div class="tira__columnas">
-            <div class="columna" id="col-ayudan"></div>
-            <div class="columna" id="col-empeoran"></div>
+            <section class="columna-xai">
+              <h3 class="aporte-favorable__titulo">Disminuye el índice predicho <span>(Aporte favorable)</span></h3>
+              <div class="columna" id="col-favorables"></div>
+            </section>
+            <section class="columna-xai">
+              <h3 class="aporte-desfavorable__titulo">Incrementa el nivel de contaminación <span>(Aporte desfavorable)</span></h3>
+              <div class="columna" id="col-desfavorables"></div>
+            </section>
           </div>
           <p class="suave centro" id="xai-nota"></p>
         </div>

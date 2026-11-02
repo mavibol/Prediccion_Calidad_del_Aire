@@ -124,44 +124,13 @@ def construir_narrativa(objetivo: str, pred: float, base: float, contribs: list[
     return frases
 
 
-# ---------------------------------------------------------------------------
-# Explicación para el público general: sin números ni jerga
-# ---------------------------------------------------------------------------
-def estado_valor(v: float, st: dict, umbral) -> tuple[str, str]:
-    """Ubica un valor frente a lo saludable (OMS) y a lo habitual en la ciudad."""
-    if umbral is not None and v > umbral:
-        return "muy_alto", "por encima de lo saludable"
-    if v > st["p90"]:
-        return "alto", "más alto de lo normal"
-    if v < st["p10"]:
-        return "bajo", "más bajo de lo normal"
-    return "normal", "normal para la ciudad"
-
-
-def _parentesis(f) -> str:
-    """Estado entre paréntesis (evita problemas de concordancia singular/plural)."""
-    return f" ({f['estado_txt']})" if f["estado_txt"] and f["estado"] != "normal" else ""
-
-
 def explicacion_simple(contribs: list[dict], pred: float, base: float,
                        stats: dict, sencillo: dict, max_por_lado: int = 3) -> dict:
-    """Resume los aportes SHAP en: una frase + lo que ensucia + lo que ayuda.
-
-    fuerza (1-3) es relativa al factor más influyente, para usar iconos
-    vectoriales en lugar de mostrar µg/m³.
-    """
+    """Agrupa los mayores aportes SHAP según su dirección respecto al valor base."""
     total = sum(abs(c["aporte"]) for c in contribs) or 1.0
     minimo = max(0.15, 0.05 * total)
-    tope = max(abs(c["aporte"]) for c in contribs) or 1.0
 
     def factor(c):
-        estado, texto = estado_valor(c["valor"], stats[c["variable"]], c["umbral_seguro"])
-        empeora = c["aporte"] > 0
-        # Si el valor y el efecto «se contradicen» (p. ej., valor bajo que empeora),
-        # no se muestra el estado para no confundir; el efecto sí se muestra.
-        if (empeora and estado == "bajo") or (not empeora and estado in ("alto", "muy_alto")):
-            estado, texto = None, None
-        rel = abs(c["aporte"]) / tope
         s = sencillo[c["variable"]]
         meta = VARIABLES[c["variable"]]
         return {"variable": c["variable"],
@@ -169,31 +138,27 @@ def explicacion_simple(contribs: list[dict], pred: float, base: float,
                 "nombre_comun": s["nombre"], "icono": s["icono"],
                 "que_es": s["que_es"], "etiqueta": c["etiqueta"], "unidad": c["unidad"],
                 "valor": c["valor"], "normal": stats[c["variable"]]["mediana"],
-                "origen": c["origen"], "estado": estado, "estado_txt": texto,
-                "fuerza": 3 if rel >= 0.6 else 2 if rel >= 0.25 else 1,
+                "origen": c["origen"],
                 "aporte": c["aporte"]}
 
-    empeoran = [factor(c) for c in sorted(contribs, key=lambda c: -c["aporte"])
-                if c["aporte"] >= minimo][:max_por_lado]
-    ayudan = [factor(c) for c in sorted(contribs, key=lambda c: c["aporte"])
-              if c["aporte"] <= -minimo][:max_por_lado]
+    desfavorables = [factor(c) for c in sorted(contribs, key=lambda c: -c["aporte"])
+                     if c["aporte"] >= minimo][:max_por_lado]
+    favorables = [factor(c) for c in sorted(contribs, key=lambda c: c["aporte"])
+                  if c["aporte"] <= -minimo][:max_por_lado]
 
     dif = pred - base
-    if dif > 0.3 and empeoran:
-        f = empeoran[0]
-        frase = f"El aire empeora sobre todo por «{f['nombre'].lower()}»{_parentesis(f)}."
-    elif dif < -0.3 and ayudan:
-        f = ayudan[0]
-        frase = f"El aire se mantiene más limpio gracias a «{f['nombre'].lower()}»{_parentesis(f)}."
+    if dif > 0.3 and desfavorables:
+        frase = "El valor predicho aumenta respecto al valor base."
+    elif dif < -0.3 and favorables:
+        frase = "El valor predicho disminuye respecto al valor base."
     else:
-        frase = "El aire estará parecido a un día normal en la ciudad."
+        frase = "El valor predicho es cercano al valor base."
 
-    sube = sum(c["aporte"] for c in contribs if c["aporte"] > 0)
-    baja = -sum(c["aporte"] for c in contribs if c["aporte"] < 0)
     return {
         "frase": frase,
-        "empeoran": empeoran,
-        "ayudan": ayudan,
-        "balance": round(sube / (sube + baja), 3) if (sube + baja) else 0.5,
-        "hay_estimadas": any(f["origen"] == "estimada" for f in empeoran + ayudan),
+        "favorables": favorables,
+        "desfavorables": desfavorables,
+        "valor_base": round(base, 4),
+        "prediccion": round(pred, 4),
+        "hay_estimadas": any(f["origen"] == "estimada" for f in desfavorables + favorables),
     }

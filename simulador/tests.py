@@ -80,6 +80,9 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertContains(r, 'id="catalogo-variables"')
         self.assertContains(r, 'id="lista-variables"')
         self.assertContains(r, "csrf-token")
+        self.assertContains(r, "Atribución calculada mediante")
+        self.assertContains(r, "SHapley Additive exPlanations")
+        self.assertContains(r, "E[f(X)]")
 
     def test_catalogo_solo_variables_del_dataset(self):
         datos = self.client.get("/api/variables/").json()
@@ -120,13 +123,16 @@ class PrediccionTests(BaseConModelos):
         for k in ("cara", "titulo", "frase"):
             self.assertTrue(a[k])
         s = d["explicacion"][a["contaminante"]]["simple"]
-        self.assertTrue(s["frase"].startswith("El aire"))
-        self.assertLessEqual(len(s["empeoran"]), 3)
-        self.assertLessEqual(len(s["ayudan"]), 3)
-        self.assertTrue(0 <= s["balance"] <= 1)
-        for f in s["empeoran"] + s["ayudan"]:
-            self.assertIn(f["fuerza"], (1, 2, 3))
-            self.assertNotIn("SHAP", f["nombre"])
+        self.assertTrue(s["frase"].startswith("El valor predicho"))
+        self.assertLessEqual(len(s["desfavorables"]), 3)
+        self.assertLessEqual(len(s["favorables"]), 3)
+        self.assertAlmostEqual(s["valor_base"], d["explicacion"][a["contaminante"]]["valor_base"], places=3)
+        self.assertAlmostEqual(s["prediccion"], d["explicacion"][a["contaminante"]]["prediccion"], places=3)
+        self.assertTrue(all(f["aporte"] >= 0 for f in s["desfavorables"]))
+        self.assertTrue(all(f["aporte"] <= 0 for f in s["favorables"]))
+        for f in s["desfavorables"] + s["favorables"]:
+            self.assertIn("µg/m³", f["unidad"])
+            self.assertIn("—", f["nombre"])
         self.assertIn(d["cobertura"]["puntos"], range(1, 6))
         self.assertTrue(all(len(r["corto"].split()) <= 6 for r in d["recomendaciones"]))
 

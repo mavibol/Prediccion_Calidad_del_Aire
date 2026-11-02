@@ -9,7 +9,7 @@
      4. calcular() envía los pares [variable : valor] con fetch() a /api/predecir/.
      5. El servidor imputa lo que falta, predice y calcula SHAP.
      6. Se repinta: banner de estado, escala, recomendaciones y
-        el «tira y afloja» de factores que ensucian o limpian el aire.
+        atribuciones TreeSHAP con su dirección y magnitud.
 
    Regla de diseño: el público ve estados, iconos y frases cortas.
    Las cifras quedan detrás del interruptor «Modo técnico».
@@ -168,7 +168,7 @@
       const x = aNumero(num.value);
       const malo = x === null || !Number.isFinite(x) || x < 0;
       num.toggleAttribute("aria-invalid", malo);
-      num.style.borderColor = malo ? "var(--ensucia)" : "";
+      num.style.borderColor = malo ? "var(--n3)" : "";
       if (malo) return;
       pintarEstado(x);
       programarCalculo(500);
@@ -305,12 +305,12 @@
     const sug = $(".sugerencia", $("#precision"));
     if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
 
-    // 5.4 Avance del «¿por qué?»: lo que más ensucia y lo que más ayuda
+    // 5.4 Resumen breve de las atribuciones TreeSHAP
     const s = d.explicacion[a.contaminante].simple;
-    const fila = (f, tipo) => f ? `<div class="porque-mini__fila"><b aria-hidden="true">${icono(f.icono, "icon")}</b>
-        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${esc(f.nombre_comun)}</small> ${tipo === "e" ? `<span class="porque-mini__ensucia">${icono("arrowUp", "icon")} ensucia</span>` : `<span class="porque-mini__limpia">${icono("arrowDown", "icon")} limpia</span>`}</span></div>` : "";
-    $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.empeoran[0], "e")}${fila(s.ayudan[0], "a")}
-      ${!s.empeoran.length && !s.ayudan.length ? `<p class="suave">Todo está dentro de lo normal.</p>` : ""}
+    const fila = (f, favorable) => f ? `<div class="porque-mini__fila ${favorable ? "porque-mini__fila--favorable" : "porque-mini__fila--desfavorable"}">
+        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${favorable ? "Aporte favorable" : "Aporte desfavorable"} · ${fmtSigno(f.aporte, 1)} µg/m³</small></span></div>` : "";
+    $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.desfavorables[0], false)}${fila(s.favorables[0], true)}
+      ${!s.desfavorables.length && !s.favorables.length ? `<p class="suave">No hay aportes individuales relevantes.</p>` : ""}
       <span class="ver-mas">Ver la explicación ${icono("arrowRight", "icon")}</span>`;
 
     // 5.5 Consejos para hoy (máximo seis palabras cada uno)
@@ -342,30 +342,32 @@
   }
 
   /* -----------------------------------------------------------------
-     PASO 6 · ¿Por qué? — «tira y afloja» entre lo que ensucia y lo que limpia
+     PASO 6 · ¿Por qué? — dirección y magnitud de los aportes TreeSHAP
      ----------------------------------------------------------------- */
-  function tarjetaFactor(f, tipo) {
-    const color = tipo === "e" ? "var(--ensucia)" : "var(--limpia)";
-    const flecha = tipo === "e" ? "arrowUp" : "arrowDown";
-    const fuerza = [1, 2, 3].map((i) => `<span class="${i <= f.fuerza ? "" : "apagada"}">${icono(flecha, "icon")}</span>`).join("");
+  function tarjetaFactor(f, maxAporte) {
+    const favorable = f.aporte < 0;
+    const color = favorable ? "var(--aporte-favorable)" : "var(--aporte-desfavorable)";
+    const ancho = Math.max(2, Math.abs(f.aporte) / maxAporte * 100);
     const d = f.valor < 5 ? 2 : 1;
     return `<button type="button" class="factor ${f.origen === "estimada" ? "factor--estimada" : ""}" style="--color:${color}"
-              aria-label="${esc(f.nombre)}: ${tipo === "e" ? "ensucia" : "limpia"} el aire. Toca para saber más.">
+              aria-label="${esc(f.nombre)}: ${favorable ? "aporte favorable, disminuye el valor predicho" : "aporte desfavorable, incrementa el valor predicho"} en ${fmtSigno(f.aporte, 1)} microgramos por metro cúbico. Toca para saber más.">
       <span class="factor__giro">
         <span class="factor__cara">
           <span class="factor__fila">
             <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
-            <span><span class="factor__nombre">${esc(f.nombre)}</span><small class="factor__comun">${esc(f.nombre_comun)}</small>
-              <span class="factor__estado">${f.estado_txt ? esc(f.estado_txt[0].toUpperCase() + f.estado_txt.slice(1)) : tipo === "e" ? "Sube el riesgo" : "Baja el riesgo"}</span></span>
-            <span class="factor__fuerza" aria-hidden="true">${fuerza}</span>
+            <span class="factor__texto"><span class="factor__nombre">${esc(f.nombre)}</span><small class="factor__comun">${esc(f.nombre_comun)}</small></span>
           </span>
+          <span class="aporte__valor">${fmtSigno(f.aporte, 1)} µg/m³</span>
+          <span class="aporte__pista" aria-hidden="true"><span style="width:${ancho}%"></span></span>
+          <span class="aporte__direccion">${favorable ? "Disminuye el índice predicho (Aporte favorable)" : "Incrementa el nivel de contaminación (Aporte desfavorable)"}</span>
           ${f.origen === "estimada" ? `<span class="factor__pista">No lo diste: lo calculamos por ti</span>` : ""}
         </span>
         <span class="factor__dorso">
           <b>${icono(f.icono, "icon")} ${esc(f.nombre)}</b>
           <small class="factor__comun">${esc(f.nombre_comun)}</small>
           <span>${esc(f.que_es)}</span>
-          <span class="suave">Valor usado: ${fmt(f.valor, d)} · normal: ${fmt(f.normal, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
+          <span class="suave">Valor usado: ${fmt(f.valor, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
+          <span class="aporte__valor">${fmtSigno(f.aporte, 1)} µg/m³</span>
         </span>
       </span></button>`;
   }
@@ -377,34 +379,34 @@
     if (!d) return;
     const a = d.alerta, s = d.explicacion[a.contaminante].simple;
 
+    const e = d.explicacion[a.contaminante];
+    const relevantes = [...s.favorables, ...s.desfavorables];
+    const maxAporte = Math.max(...relevantes.map((f) => Math.abs(f.aporte)), 0.01);
     $("#xai-frase").textContent = s.frase;
-    // Nudo de la cuerda: se corre hacia el lado que «gana»
-    const nudo = $("#nudo");
-    nudo.innerHTML = icono(a.cara, "icon");
-    nudo.style.borderColor = COLOR_NIVEL[a.orden];
-    requestAnimationFrame(() => (nudo.style.left = Math.min(92, Math.max(8, s.balance * 100)) + "%"));
+    $("#xai-resumen-base").innerHTML = `Valor base E[f(X)]: <b>${fmt(e.valor_base, 2)} µg/m³</b>
+      <span aria-hidden="true">+</span> aportes TreeSHAP = valor predicho <b>${fmt(e.prediccion, 2)} µg/m³</b>`;
 
-    $("#col-ayudan").innerHTML = s.ayudan.length ? s.ayudan.map((f) => tarjetaFactor(f, "a")).join("")
-      : `<div class="columna__vacia">Nada destacado de este lado</div>`;
-    $("#col-empeoran").innerHTML = s.empeoran.length ? s.empeoran.map((f) => tarjetaFactor(f, "e")).join("")
-      : `<div class="columna__vacia">Nada destacado de este lado</div>`;
+    $("#col-favorables").innerHTML = s.favorables.length ? s.favorables.map((f) => tarjetaFactor(f, maxAporte)).join("")
+      : `<div class="columna__vacia">Sin aportes favorables relevantes</div>`;
+    $("#col-desfavorables").innerHTML = s.desfavorables.length ? s.desfavorables.map((f) => tarjetaFactor(f, maxAporte)).join("")
+      : `<div class="columna__vacia">Sin aportes desfavorables relevantes</div>`;
     $$(".factor").forEach((b) => b.addEventListener("click", () => b.classList.toggle("girada")));
-    $("#xai-nota").textContent = "Toca una tarjeta para saber qué es. Mayor intensidad del icono = más influencia." +
+    $("#xai-nota").textContent = "Las barras comparan la magnitud absoluta de los aportes mostrados." +
       (s.hay_estimadas ? " Las tarjetas punteadas son datos que no diste: los calculamos por ti." : "");
 
     // Modo técnico: SHAP por variable para PM2.5 o PM10
     $$("#xai-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.objetivo === estado.objetivoTec)));
-    const e = d.explicacion[estado.objetivoTec];
-    const items = e.contribuciones.map((c) => ({
+    const eTec = d.explicacion[estado.objetivoTec];
+    const items = eTec.contribuciones.map((c) => ({
       etiqueta: c.etiqueta, valor: c.aporte,
       tooltip: [["Valor", fmt(c.valor, 3)], ["Origen", c.origen], ["Aporte", fmtSigno(c.aporte) + " µg/m³"]],
     }));
-    items.push({ etiqueta: "Calendario", valor: e.calendario.aporte, tooltip: [["Promedio", "12 meses × 7 días"]] });
+    items.push({ etiqueta: "Calendario", valor: eTec.calendario.aporte, tooltip: [["Promedio", "12 meses x 7 días"]] });
     if (document.body.classList.contains("modo-tecnico"))
       window.Graficos.barrasDivergentes($("#grafico-barras"), items);
-    const v = e.verificacion_aditiva;
-    $("#xai-ecuacion").innerHTML = `Base ${fmt(e.valor_base, 3)} + Σ aportes ${fmtSigno(v.base_mas_aportes - e.valor_base, 3)}
-      = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${icono(v.ok ? "checkCircle" : "triangleAlert", "icon")} ${v.ok ? "aditividad SHAP verificada" : "revisar aditividad SHAP"}`;
+    const v = eTec.verificacion_aditiva;
+    $("#xai-ecuacion").innerHTML = `Base E[f(X)] ${fmt(eTec.valor_base, 3)} + suma de aportes ${fmtSigno(v.base_mas_aportes - eTec.valor_base, 3)}
+      = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${icono(v.ok ? "checkCircle" : "triangleAlert", "icon")} ${v.ok ? "aditividad TreeSHAP verificada" : "revisar aditividad TreeSHAP"}`;
   }
   $$("#xai-tabs button").forEach((b) => b.addEventListener("click", () => { estado.objetivoTec = b.dataset.objetivo; pintarPorque(); }));
 
