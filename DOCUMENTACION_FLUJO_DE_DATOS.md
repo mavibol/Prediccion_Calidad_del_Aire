@@ -153,7 +153,9 @@ El JSON trae mucho más de lo que se muestra. La interfaz usa solo el bloque `si
 - **Banner de estado** (`Graficos.escena`): un fondo degradado y sutil cambia de tono según el nivel, sin siluetas de edificios. El estado se acompaña con iconos SVG y texto, nunca solo con color.
 - **Atribuciones TreeSHAP**: separa los aportes negativos, que disminuyen el valor predicho, de los positivos, que lo incrementan; muestra hasta tres por grupo. Cada tarjeta presenta el aporte firmado en µg/m³ y una barra cuya longitud compara la magnitud absoluta de los factores visibles. También se muestran el valor base E[f(X)] y la predicción. La interpretación es relativa al modelo y no implica causalidad.
 - **Estado de cada dato** («por encima de lo saludable», «más alto de lo normal», «normal», «más bajo de lo normal») con la guía OMS y los percentiles 10 y 90 de la ciudad. Si el estado contradice el efecto (p. ej., un valor bajo que el modelo asocia con más contaminación), se omite el estado para no confundir.
-- **Precisión** en 5 puntos (= cobertura de importancia) y un botón que agrega el dato faltante más útil.
+- **Completitud** como cantidad y porcentaje de variables ingresadas sobre las nueve disponibles. Se distingue explícitamente de la cobertura de importancia SHAP, que es ponderada y no representa el porcentaje de sensores presentes.
+- **Rango predictivo empírico P95** calculado con el percentil 95 de los errores absolutos en el conjunto de prueba cronológico reservado. Es una referencia observada, no un intervalo de confianza garantizado; el desempeño puede cambiar con el tiempo y las condiciones.
+- **Imputación**: se informa cuántas variables faltaban y el método aplicado (imputación iterativa aprendida del entrenamiento o mediana histórica, según configuración).
 - **Modo técnico**: muestra las cifras, el gráfico SHAP por variable y la comprobación aditiva para evaluadores.
 
 ---

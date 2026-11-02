@@ -295,13 +295,15 @@
     $("#alerta-local").hidden = !a.dia_critico_local;
     $("#alerta-local").innerHTML = `${icono("triangleAlert", "icon")} Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.`;
 
-    // 5.3 Precisión: puntos + sugerencia del dato más útil que falta
+    // 5.3 Completitud observada + sugerencia del dato más útil que falta
     const faltante = CATALOGO.find((v) => !estado.filas.has(v.id));
-    const pts = d.cobertura.puntos;
-    $("#precision").innerHTML = `<h3>Precisión</h3>
-      <div class="precision__puntos" aria-label="${pts} de 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= pts ? "lleno" : ""}"></i>`).join("")}</div>
-      <span class="suave">${pts >= 4 ? "¡Muy bien! Tienes casi todos los datos importantes." : "Agrega más datos para afinar el resultado."}</span>
-      ${faltante && pts < 5 ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.etiqueta)} — ${esc(faltante.nombre_largo)}</button>` : ""}`;
+    const completas = d.entrada.completitud;
+    $("#precision").innerHTML = `<h3>Datos ingresados</h3>
+      <div class="completitud__valor">${completas.ingresadas} de ${completas.total} variables ingresadas <b>(${fmt(completas.porcentaje, 0)} %)</b></div>
+      <div class="completitud__barra" role="meter" aria-label="Completitud de datos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completas.porcentaje}">
+        <span style="width:${completas.porcentaje}%"></span></div>
+      <span class="suave">Cobertura de importancia del modelo: ${fmt(d.cobertura.porcentaje, 1)} %; es una medida ponderada, no el porcentaje de variables ingresadas.</span>
+      ${faltante && completas.ingresadas < completas.total ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.etiqueta)} — ${esc(faltante.nombre_largo)}</button>` : ""}`;
     const sug = $(".sugerencia", $("#precision"));
     if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
 
@@ -333,12 +335,13 @@
     // 5.7 Modo técnico: las cifras reales
     const p = d.predicciones;
     $("#tec-simulador").innerHTML = `<h3>Detalle técnico</h3><div class="tec-cifras">
-      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>± ${fmt(p.pm2_5.error_tipico, 2)} (MAE prueba)</div>
-      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>± ${fmt(p.pm10.error_tipico, 2)} (MAE prueba)</div>
+      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm2_5.error_tipico, 2)} · rango P95 prueba ${fmt(p.pm2_5.intervalo_p95.inferior, 2)}–${fmt(p.pm2_5.intervalo_p95.superior, 2)} µg/m³</div>
+      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm10.error_tipico, 2)} · rango P95 prueba ${fmt(p.pm10.intervalo_p95.inferior, 2)}–${fmt(p.pm10.intervalo_p95.superior, 2)} µg/m³</div>
       <div>Cobertura de importancia<b>${fmt(d.cobertura.porcentaje, 1)} %</b>PM2.5 ${fmt(d.cobertura.por_objetivo.pm2_5, 0)} % · PM10 ${fmt(d.cobertura.por_objetivo.pm10, 0)} %</div>
       <div>Categoría ICA<b>${esc(a.categoria_ica)}</b>${esc(a.motivo)}</div></div>
       <p class="suave">Estimadas: ${d.entrada.estimadas.map((e) => `${esc(e.etiqueta)} ≈ ${fmt(e.valor, 2)}`).join(" · ") || "ninguna"} ·
       ${esc(d.tecnico.explicador[a.contaminante])} · ${fmt(d.tecnico.latencia_ms, 0)} ms</p>`;
+    if (estado.benchmark && !$("#vista-modelos").hidden) pintarConfiable();
   }
 
   /* -----------------------------------------------------------------
@@ -481,7 +484,36 @@
         <p class="suave">${b.calculado.sustituto ? `${icono("triangleAlert", "icon")} Calculado con un sustituto de XGBoost (scikit-learn). ` : ""}Tesis (prueba): XGBoost MAE ${fmt(b.tesis.prueba[1][clave].mae, 3)} · R² ${fmt(b.tesis.prueba[1][clave].r2, 3)}.
         El escenario B (mismo día) logra R² ${fmt(b.tesis.prueba[2][clave].r2, 3)}, pero describe el presente; el objetivo es anticipar.</p></div>` : "";
 
-    $("#bm-contenido").innerHTML = `
+    const d = estado.resultado;
+    const resumenActual = d ? (() => {
+      const comp = d.entrada.completitud;
+      const imputadas = d.entrada.estimadas.length;
+      const metodoImputacion = d.tecnico.imputacion === "iterativa"
+        ? "imputación iterativa ajustada con datos de entrenamiento"
+        : "mediana histórica calculada con datos de entrenamiento";
+      const prediccion = (etiqueta, p) => `<div class="incertidumbre__prediccion">
+        <b>${etiqueta}: ${fmt(p.valor, 2)} µg/m³</b>
+        <span>Rango predictivo empírico P95: ${fmt(p.intervalo_p95.inferior, 2)}–${fmt(p.intervalo_p95.superior, 2)} µg/m³</span>
+      </div>`;
+      return `<section class="tarjeta resumen-fiabilidad" aria-labelledby="resumen-fiabilidad-titulo">
+        <h2 id="resumen-fiabilidad-titulo">Predicción y calidad de los datos</h2>
+        <div class="incertidumbre__predicciones">
+          ${prediccion("PM₂.₅", d.predicciones.pm2_5)}${prediccion("PM₁₀", d.predicciones.pm10)}
+        </div>
+        <div class="completitud">
+          <div class="completitud__valor">Completitud de datos: <b>${comp.ingresadas} de ${comp.total} variables (${fmt(comp.porcentaje, 0)} %)</b></div>
+          <div class="completitud__barra" role="meter" aria-label="Completitud de datos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${comp.porcentaje}">
+            <span style="width:${comp.porcentaje}%"></span></div>
+        </div>
+        <p class="suave">${imputadas
+          ? `${imputadas} ${imputadas === 1 ? "variable imputada" : "variables imputadas"} mediante ${metodoImputacion}.`
+          : "No se imputaron variables: todos los datos disponibles fueron ingresados."}</p>
+        <p class="suave">El rango P95 se estima con errores absolutos del conjunto de prueba cronológico reservado. Es orientativo: no es un intervalo de confianza garantizado y el error puede variar con el tiempo y las condiciones.</p>
+      </section>`;
+    })() : `<section class="tarjeta resumen-fiabilidad"><h2>Predicción y calidad de los datos</h2>
+      <p class="suave">Ingresa datos en el simulador para ver la predicción, su rango empírico y la completitud.</p></section>`;
+
+    $("#bm-contenido").innerHTML = `${resumenActual}
       <div class="rejilla-conf">
         <div class="tarjeta diana" id="diana"></div>
         <div>

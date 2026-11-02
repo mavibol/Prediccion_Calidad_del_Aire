@@ -256,13 +256,17 @@ class ServicioML:
             self.importancia[clave] = dict(zip(obj.canonicas, imp.tolist()))
 
     def _error_tipico(self):
-        """MAE en el conjunto de prueba: el «± error típico» que ve el usuario."""
-        self.mae_prueba = {}
+        """Calcula MAE y margen P95 con los errores del conjunto de prueba reservado."""
+        self.mae_prueba, self.margen_p95_prueba = {}, {}
         for clave, obj in self.objetivos.items():
             X = self.test[obj.canonicas].copy()
             X.columns = obj.columnas
-            pred = obj.modelo.predict(X.astype(float))
-            self.mae_prueba[clave] = float(np.mean(np.abs(pred - self.test[f"y_{clave}"])))
+            errores = np.abs(obj.modelo.predict(X.astype(float)) - self.test[f"y_{clave}"].to_numpy())
+            if not len(errores):
+                raise ValueError(f"No hay datos de prueba para estimar el error de {clave}.")
+            self.mae_prueba[clave] = float(np.mean(errores))
+            orden = min(len(errores), math.ceil((len(errores) + 1) * 0.95))
+            self.margen_p95_prueba[clave] = float(np.sort(errores)[orden - 1])
 
     @property
     def listo(self) -> bool:
@@ -391,9 +395,16 @@ class ServicioML:
                                                      actual, previo, estimadas, fuera,
                                                      error_aditivo)
             n_ica = nivel_ica(clave, pred)
+            margen_p95 = self.margen_p95_prueba[clave]
             predicciones[clave] = {
                 "valor": round(pred, 2),
                 "error_tipico": round(self.mae_prueba[clave], 2),
+                "margen_p95": round(margen_p95, 2),
+                "intervalo_p95": {
+                    "inferior": round(max(0.0, pred - margen_p95), 2),
+                    "superior": round(pred + margen_p95, 2),
+                    "referencia": "errores absolutos en el conjunto de prueba cronológico",
+                },
                 "valor_base": round(base, 2),
                 "nivel": n_ica["id"], "nivel_etiqueta": n_ica["etiqueta"],
                 "supera_p90": bool(pred > self.p90[clave]),
@@ -415,6 +426,11 @@ class ServicioML:
                                "valor": round(x, 3), "unidad": cat.VARIABLES[v]["unidad"],
                                "metodo": self.metodo_imputacion}
                               for v, x in estimadas.items()],
+                "completitud": {
+                    "ingresadas": len(actual),
+                    "total": len(VARIABLES_BASE),
+                    "porcentaje": round(len(actual) / len(VARIABLES_BASE) * 100, 1),
+                },
             },
             "cobertura": {
                 "porcentaje": round(cob_media * 100, 1),
@@ -430,7 +446,7 @@ class ServicioML:
             "tecnico": {
                 "explicador": {k: o.explicador.nombre for k, o in self.objetivos.items()},
                 "filas_calendario": len(filas),
-                "imputacion": self.metodo_imputacion,
+                "imputacion": "iterativa" if self.imputador is not None else "mediana",
                 "latencia_ms": round((time.perf_counter() - t0) * 1000, 1),
             },
         }

@@ -205,6 +205,10 @@ body.modo-tecnico .tec { display: block !important; }
 .precision__puntos { display: flex; gap: 6px; margin: 8px 0; }
 .precision__puntos i { width: 22px; height: 10px; border-radius: 5px; background: var(--superficie-2); transition: background .4s; }
 .precision__puntos i.lleno { background: var(--acento); }
+.completitud { margin: 12px 0; }
+.completitud__valor { font-size: 15px; }
+.completitud__barra { height: 9px; margin-top: 7px; background: var(--superficie-2); border-radius: 99px; overflow: hidden; }
+.completitud__barra > span { display: block; height: 100%; background: var(--acento); border-radius: inherit; transition: width .25s ease; }
 .sugerencia { margin-top: 8px; border: 1px dashed var(--acento); background: var(--acento-suave); color: var(--tinta); border-radius: 12px; padding: 8px 12px; cursor: pointer; font-size: 14.5px; text-align: left; width: 100%; }
 .sugerencia:hover { filter: brightness(.97); }
 .porque-mini { text-decoration: none; color: inherit; display: block; transition: transform .15s, box-shadow .15s; }
@@ -276,6 +280,13 @@ body.modo-tecnico .tec { display: block !important; }
 /* ---------- 7. ¿Es confiable? ---------- */
 .rejilla-conf { display: grid; grid-template-columns: minmax(300px, 1.1fr) 1fr; gap: 22px; align-items: start; }
 @media (max-width: 960px) { .rejilla-conf { grid-template-columns: 1fr; } }
+.resumen-fiabilidad { margin-bottom: 22px; }
+.resumen-fiabilidad h2 { font-size: 21px; margin-bottom: 14px; }
+.incertidumbre__predicciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.incertidumbre__prediccion { padding: 14px; border-radius: 14px; background: var(--superficie-2); font-variant-numeric: tabular-nums; }
+.incertidumbre__prediccion b, .incertidumbre__prediccion span { display: block; }
+.incertidumbre__prediccion b { font-size: 18px; }
+.incertidumbre__prediccion span { margin-top: 4px; color: var(--tinta-2); font-size: 14px; }
 .diana svg { display: block; width: 100%; max-width: 460px; margin: 0 auto; height: auto; }
 .diana .dardo { transition: transform 1s cubic-bezier(.2, .9, .3, 1.2), opacity .6s; }
 .diana text { font-family: var(--fuente); }

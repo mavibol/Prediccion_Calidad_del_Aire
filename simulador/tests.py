@@ -111,9 +111,19 @@ class PrediccionTests(BaseConModelos):
         d = r.json()
         self.assertEqual(len(d["entrada"]["ingresadas"]), 2)
         self.assertEqual(len(d["entrada"]["estimadas"]), 7)
+        self.assertEqual(d["entrada"]["completitud"], {
+            "ingresadas": 2, "total": len(cat.VARIABLES), "porcentaje": 22.2,
+        })
+        self.assertEqual(d["tecnico"]["imputacion"], "iterativa")
         for clave in ("pm2_5", "pm10"):
             self.assertTrue(d["explicacion"][clave]["verificacion_aditiva"]["ok"])
             self.assertEqual(len(d["explicacion"][clave]["detalle"]), 21)
+            pred = d["predicciones"][clave]
+            intervalo = pred["intervalo_p95"]
+            self.assertLessEqual(intervalo["inferior"], pred["valor"])
+            self.assertGreaterEqual(intervalo["superior"], pred["valor"])
+            self.assertGreater(pred["margen_p95"], 0)
+            self.assertIn("prueba cronológico", intervalo["referencia"])
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
         self.assertIn(d["alerta"]["nivel"], [n["id"] for n in cat.NIVELES])
 
@@ -148,6 +158,8 @@ class PrediccionTests(BaseConModelos):
         self.assertGreater(todas["cobertura"]["porcentaje"], una["cobertura"]["porcentaje"])
         self.assertAlmostEqual(todas["cobertura"]["porcentaje"], 100.0, places=0)
         self.assertEqual(todas["entrada"]["estimadas"], [])
+        self.assertEqual(todas["entrada"]["completitud"]["ingresadas"], len(cat.VARIABLES))
+        self.assertEqual(todas["entrada"]["completitud"]["porcentaje"], 100.0)
 
     def test_lectura_actual_extrema_eleva_el_semaforo(self):
         d = self.predecir([{"variable": "pm2_5", "valor": 80}]).json()
