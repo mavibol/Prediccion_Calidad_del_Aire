@@ -68,6 +68,14 @@
 
         <div class="tarjeta panel-datos">
           <h2>Lo que sabes del aire hoy</h2>
+          <div class="ejemplos">
+            <span>¿Sin datos? Prueba un ejemplo:</span>
+            <div class="ejemplos__chips">
+              <button type="button" class="chip" data-escenario="p10"><span data-icon="sun" aria-hidden="true"></span> Día limpio</button>
+              <button type="button" class="chip" data-escenario="mediana"><span data-icon="dotCircle" aria-hidden="true"></span> Día normal</button>
+              <button type="button" class="chip" data-escenario="p90"><span data-icon="haze" aria-hidden="true"></span> Día cargado</button>
+            </div>
+          </div>
           <p class="suave">Agrega un dato y escribe su valor. Entre más datos, más preciso.</p>
 
           <div class="agregador">
@@ -78,14 +86,6 @@
 
           <ul class="lista-variables" id="lista-variables" aria-label="Datos agregados"></ul>
 
-          <div class="ejemplos">
-            <span>¿Sin datos? Prueba un ejemplo:</span>
-            <div class="ejemplos__chips">
-              <button type="button" class="chip" data-escenario="p10"><span data-icon="sun" aria-hidden="true"></span> Día limpio</button>
-              <button type="button" class="chip" data-escenario="mediana"><span data-icon="dotCircle" aria-hidden="true"></span> Día normal</button>
-              <button type="button" class="chip" data-escenario="p90"><span data-icon="haze" aria-hidden="true"></span> Día cargado</button>
-            </div>
-          </div>
           <button id="btn-limpiar" type="button" class="btn btn--fantasma" hidden><span data-icon="rotateCcw" aria-hidden="true"></span> Empezar de nuevo</button>
         </div>
 

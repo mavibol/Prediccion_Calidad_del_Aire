@@ -153,8 +153,7 @@
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
         <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
-               aria-describedby="dato-rango-${id} dato-error-${id}" value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
-        <small class="dato__rango" id="dato-rango-${id}">Rango de entrada: ${fmt(v.min_valido, d)}–${fmt(v.max_valido, d)} ${esc(v.unidad)}. Límite amplio, independiente del histórico.</small>
+               aria-describedby="dato-error-${id}" value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
         <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
@@ -285,24 +284,45 @@
     $("#bienvenida").hidden = true;
     $("#resultado").hidden = false;
 
-    // 5.1 El banner cambia de tono según el nivel
+    // 5.1 El fondo y la lectura principal cambian según el nivel pronosticado
     if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
     estado.escena.actualizar(a.orden);
     const ver = $("#veredicto");
     const clave = a.titulo + a.cara;
+    const pronostico = d.predicciones[a.contaminante];
+    const etiquetaPronostico = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
+    const detalleNivel = [
+      "Nivel estimado dentro de los límites saludables",
+      "Nivel aceptable para la mayoría de las personas",
+      "Puede afectar a personas sensibles",
+      "Puede afectar la salud de toda la población",
+      "Nivel muy perjudicial para la salud",
+    ][a.orden];
     if (ver.dataset.clave !== clave) { // solo «rebota» la cara si cambió el nivel
       ver.dataset.clave = clave;
-      ver.innerHTML = `<span class="veredicto__cara" aria-hidden="true">${icono(a.cara, "icon")}</span>
-        <span><span class="veredicto__titulo">${esc(a.titulo)}</span><br><span class="veredicto__frase">${esc(a.frase)}</span></span>`;
+      ver.innerHTML = `<span class="veredicto__estado">
+          <span class="veredicto__cara" style="color:${COLOR_NIVEL[a.orden]}" aria-hidden="true">${icono(a.cara, "icon")}</span>
+          <span class="veredicto__titulo">${esc(a.titulo)}</span>
+        </span>
+        <span class="veredicto__medicion">
+          <span class="veredicto__etiqueta">${etiquetaPronostico} estimado para mañana</span>
+          <strong class="veredicto__valor"><span class="veredicto__numero">${fmt(pronostico.valor, 1)}</span> <span>µg/m³</span></strong>
+        </span>
+        <span class="veredicto__frase">${detalleNivel}. ${esc(a.frase)}</span>`;
     }
+    ver.querySelector(".veredicto__etiqueta").textContent = `${etiquetaPronostico} estimado para mañana`;
+    ver.querySelector(".veredicto__numero").textContent = fmt(pronostico.valor, 1);
 
-    // 5.2 Escala de cinco estados (color + icono + palabra)
-    $("#escala").innerHTML = CARAS.map(([cara, txt], i) => `
-      <div class="escalon ${i === a.orden ? "activo" : ""}" style="color:${COLOR_NIVEL[i]}" ${i === a.orden ? 'aria-current="true"' : ""}>
-        <span class="escalon__cara" aria-hidden="true">${icono(cara, "icon")}</span>
-        <span class="escalon__txt" style="color:var(--tinta)">${txt}</span>
-        <span class="escalon__barra" style="background:${COLOR_NIVEL[i]}"></span>
-      </div>`).join("");
+    // 5.2 Barra de cinco estados con el nivel pronosticado destacado
+    const nivelActual = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"][a.orden];
+    $("#escala").innerHTML = `
+      <div class="escala__pista" role="img" aria-label="Nivel pronosticado: ${nivelActual}">
+        ${CARAS.map((_, i) => `<span class="escala__tramo ${i === a.orden ? "activo" : ""}" style="--nivel-color:${COLOR_NIVEL[i]}"></span>`).join("")}
+        <span class="escala__indicador" style="--nivel-color:${COLOR_NIVEL[a.orden]};--posicion:${(a.orden + 0.5) * 20}%" aria-hidden="true"></span>
+      </div>
+      <div class="escala__etiquetas" aria-hidden="true">
+        ${["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"].map((txt, i) => `<span class="escala__etiqueta ${i === a.orden ? "activo" : ""}">${txt}</span>`).join("")}
+      </div>`;
 
     $("#alerta-local").hidden = !a.dia_critico_local;
     $("#alerta-local").innerHTML = `${icono("triangleAlert", "icon")} Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.`;

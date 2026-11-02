@@ -51,14 +51,13 @@
   // ===================================================================
   const NIVEL_ESCENA = {
     fondo:      ["#e7f4e9", "#f4f2df", "#fff0df", "#fbe8e6", "#eee8f5"],
-    acento:     ["#26734d", "#8a7418", "#a95b27", "#a33d3d", "#704593"],
     sol:        [1, .85, .55, .3, .12],
   };
 
   function escena(contenedor) {
     const W = 640, H = 300;
     contenedor.innerHTML = "";
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Fondo de color según la calidad del aire" }, contenedor);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid slice", "aria-hidden": "true" }, contenedor);
     const defs = el("defs", {}, svg);
     const gradiente = el("linearGradient", { id: "fondo-aire", x1: 0, y1: 0, x2: 1, y2: 1 }, defs);
     el("stop", { class: "tono-inicial", offset: "0%", "stop-color": NIVEL_ESCENA.fondo[0] }, gradiente);
@@ -68,20 +67,11 @@
     const sol = el("g", { class: "sol" }, svg);
     el("circle", { cx: 535, cy: 82, r: 54, fill: "#fff", opacity: .72 }, sol);
     el("circle", { cx: 535, cy: 82, r: 34, fill: "#fff", opacity: .9 }, sol);
-    const flujo = el("g", { class: "flujo", fill: "none", "stroke-width": 5, "stroke-linecap": "round" }, svg);
-    [
-      "M92 112h184c26 0 26-38 0-38h-24",
-      "M60 151h250c30 0 30 42 0 42h-30",
-      "M112 224h150c23 0 23-32 0-32",
-    ].forEach((d) => el("path", { d }, flujo));
-
     function actualizar(nivel) {
       const n = Math.max(0, Math.min(4, nivel));
       svg.querySelector(".tono-inicial").setAttribute("stop-color", NIVEL_ESCENA.fondo[n]);
       svg.querySelector(".tono-final").setAttribute("stop-color", n < 2 ? "#f8fcf8" : "#fffafa");
       sol.setAttribute("opacity", NIVEL_ESCENA.sol[n]);
-      flujo.setAttribute("stroke", NIVEL_ESCENA.acento[n]);
-      flujo.setAttribute("opacity", .56);
     }
     actualizar(0);
     return { actualizar };

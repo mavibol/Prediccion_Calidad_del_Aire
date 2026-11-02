@@ -142,13 +142,11 @@ body.modo-tecnico .tec { display: block !important; }
 .dato__que { font-size: 14px; color: var(--tinta-2); margin: 8px 0 0; padding: 8px 10px; background: var(--superficie-2); border-radius: 10px; }
 .dato__control { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 10px; }
 .dato__num { text-align: left; min-height: 42px; padding: 8px 12px; font-variant-numeric: tabular-nums; }
-.dato__rango, .dato__error { font-size: 12.5px; }
-.dato__rango { color: var(--tinta-2); }
-.dato__error { color: var(--n3); font-weight: 600; }
+.dato__error { color: var(--n3); font-size: 12.5px; font-weight: 600; }
 .dato__estado { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin-top: 6px; color: var(--tinta-2); }
 .dato__estado i { width: 10px; height: 10px; border-radius: 50%; }
 
-.ejemplos { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--eje); color: var(--tinta-2); font-size: 14.5px; }
+.ejemplos { margin: 12px 0 16px; color: var(--tinta-2); font-size: 14.5px; }
 .ejemplos__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 #btn-limpiar { margin-top: 10px; }
 
@@ -165,30 +163,39 @@ body.modo-tecnico .tec { display: block !important; }
 .paso__flecha .icon { width: 26px; height: 26px; }
 @media (max-width: 640px) { .paso__flecha { display: none; } }
 
-/* Banner semántico con fondo sutil, sin edificios */
-.escena-tarjeta { position: relative; padding: 0; overflow: hidden; }
-.escena svg { display: block; width: 100%; height: auto; }
-.escena .tono-inicial, .escena .tono-final, .escena .sol, .escena .flujo { transition: stop-color 1s ease, opacity 1s ease, stroke 1s ease; }
-.veredicto { position: absolute; left: 18px; top: 18px; display: flex; align-items: center; gap: 14px; padding: 12px 20px 12px 12px; border-radius: 20px; background: rgba(255,255,255,.82); backdrop-filter: blur(6px); color: #10201c; box-shadow: 0 6px 20px rgba(0,0,0,.12); max-width: calc(100% - 36px); }
+/* Pronóstico numérico sobre un fondo suave que cambia según el nivel */
+.escena-tarjeta { position: relative; min-height: 300px; padding: 0; overflow: hidden; }
+.escena { position: absolute; inset: 0; }
+.escena svg { display: block; width: 100%; height: 100%; }
+.escena .tono-inicial, .escena .tono-final, .escena .sol { transition: stop-color 1s ease, opacity 1s ease; }
+.veredicto { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; max-width: 76%; padding: 24px 28px 48px; color: #10201c; }
+.veredicto__estado { display: flex; align-items: center; gap: 12px; }
 .veredicto__cara { display: grid; place-items: center; color: var(--acento); line-height: 1; animation: rebote .5s ease; }
-.veredicto__cara .icon { width: 46px; height: 46px; }
+.veredicto__cara .icon { width: 40px; height: 40px; }
 @keyframes rebote { 0% { transform: scale(.6); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
 .veredicto__titulo { font-size: clamp(22px, 2.6vw, 30px); font-weight: 800; letter-spacing: -.02em; }
-.veredicto__frase { font-size: 16px; color: #3b4a46; }
+.veredicto__medicion { display: flex; flex-direction: column; gap: 2px; }
+.veredicto__etiqueta { color: #3b4a46; font-size: 15px; font-weight: 600; }
+.veredicto__valor { font-size: clamp(36px, 5vw, 52px); line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
+.veredicto__valor > span:last-child { font-size: .4em; font-weight: 600; letter-spacing: 0; }
+.veredicto__frase { font-size: 15px; line-height: 1.45; color: #3b4a46; }
 .escena__nota { position: absolute; right: 14px; bottom: 10px; font-size: 12.5px; color: var(--tinta-2); background: rgba(255,255,255,.82); border-radius: 8px; padding: 4px 8px; }
 @media (max-width: 560px) {
-  .veredicto { position: static; margin: 0; border-radius: 0; max-width: none; background: var(--superficie); color: var(--tinta); }
-  .veredicto__frase { color: var(--tinta-2); }
+  .veredicto { max-width: 100%; gap: 12px; padding: 20px 18px 48px; }
+  .veredicto__cara .icon { width: 34px; height: 34px; }
+  .veredicto__valor { font-size: clamp(34px, 10vw, 46px); }
   .escena__nota { bottom: auto; top: 8px; }
 }
 
-/* Escala de estados */
-.escala { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-.escalon { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 8px; border-radius: 16px; background: var(--superficie); border: 2px solid transparent; opacity: .45; filter: grayscale(.8); transition: all .4s ease; text-align: center; }
-.escalon__cara .icon { width: 27px; height: 27px; }
-.escalon__txt { font-size: 12.5px; font-weight: 600; }
-.escalon__barra { width: 100%; height: 6px; border-radius: 3px; }
-.escalon.activo { opacity: 1; filter: none; transform: translateY(-4px) scale(1.06); border-color: currentColor; box-shadow: var(--sombra); }
+/* Semáforo horizontal de cinco niveles */
+.escala { display: grid; gap: 8px; padding: 4px 2px; }
+.escala__pista { position: relative; display: flex; gap: 3px; height: 12px; }
+.escala__tramo { flex: 1; border-radius: 99px; background: var(--nivel-color); opacity: .22; transition: opacity .25s, transform .25s; }
+.escala__tramo.activo { opacity: 1; transform: scaleY(1.25); }
+.escala__indicador { position: absolute; top: 50%; left: var(--posicion); width: 20px; height: 20px; border: 3px solid var(--superficie); border-radius: 50%; background: var(--nivel-color); box-shadow: 0 1px 5px rgba(16,32,28,.32); transform: translate(-50%, -50%); transition: left .3s ease, background .25s; }
+.escala__etiquetas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; text-align: center; }
+.escala__etiqueta { color: var(--tinta-3); font-size: clamp(10px, 1.3vw, 12.5px); line-height: 1.2; transition: color .25s, font-weight .25s; }
+.escala__etiqueta.activo { color: var(--tinta); font-weight: 750; }
 
 .alerta-local { border-radius: 16px; padding: 12px 16px; background: rgba(236,131,90,.14); border: 1px solid rgba(236,131,90,.4); font-weight: 600; }
 
