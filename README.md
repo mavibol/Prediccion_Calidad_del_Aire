@@ -8,9 +8,11 @@ Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, pr
 |---|---|
 | **Mi aire** (simulador) | Agrega datos con un selector e introduce sus valores en campos numéricos, sin un tope superior configurado. Todo se recalcula al instante: un fondo sutil cambia de tono según el nivel, un indicador vectorial marca el estado y aparecen 5 consejos de máximo seis palabras (ciclismo, correr, tapabocas, ventilar, niños). Un indicador de precisión sugiere el siguiente dato más útil. |
 | **¿Por qué?** (explicabilidad) | Atribuciones TreeSHAP agrupadas por dirección: aportes que disminuyen el valor predicho y aportes que lo incrementan. Muestra su magnitud en µg/m³, una barra comparativa, el valor base E[f(X)] y la predicción. Las tarjetas giran al tocarlas para explicar cada variable. |
-| **¿Es confiable?** (comparador) | Muestra para la predicción actual un rango predictivo empírico P95 calculado con errores del conjunto de prueba cronológico, la completitud real de variables ingresadas y el método usado para imputar faltantes. El rango es orientativo, no un intervalo de confianza garantizado. También compara modelos con un tiro al blanco y explica sus límites. |
+| **¿Es confiable?** (comparador) | En modo técnico muestra MAE/RMSE de validación y prueba, completitud, método de imputación y un rango predictivo empírico P95 calibrado con validación cronológica. También compara modelos y explica sus límites. |
 
-El interruptor **Modo técnico** (pie del menú) muestra para evaluadores las cifras en µg/m³, el gráfico SHAP por variable, la comprobación aditiva y la tabla completa de métricas.
+El interruptor **Modo técnico** (pie del menú) muestra para evaluadores una cascada interactiva con aportes SHAP exactos por característica, la comprobación aditiva y los errores MAE/RMSE. El botón **Modelo listo** de la barra lateral abre la ficha del algoritmo y sus métricas de validación.
+
+El rango predictivo se calibra con errores absolutos del conjunto de validación; es una referencia empírica, no un intervalo de confianza para parámetros ni una cobertura garantizada. Los errores pueden cambiar con el tiempo y las condiciones.
 
 El formulario usa nomenclatura formal (por ejemplo, PM₁₀ y PM₂.₅) y las unidades del dataset. Solo ofrece las nueve variables que realmente alimentan al modelo; temperatura, humedad relativa, radiación solar y velocidad del viento no forman parte del dataset/modelo actual.
 

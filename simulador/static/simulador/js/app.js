@@ -56,6 +56,7 @@
     temporizador: null,
     objetivoTec: "pm2_5",  // pestaña del modo técnico
     benchmark: null,
+    fichaModelo: null,
     escena: null,
   };
 
@@ -335,8 +336,8 @@
     // 5.7 Modo técnico: las cifras reales
     const p = d.predicciones;
     $("#tec-simulador").innerHTML = `<h3>Detalle técnico</h3><div class="tec-cifras">
-      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm2_5.error_tipico, 2)} · rango P95 prueba ${fmt(p.pm2_5.intervalo_p95.inferior, 2)}–${fmt(p.pm2_5.intervalo_p95.superior, 2)} µg/m³</div>
-      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm10.error_tipico, 2)} · rango P95 prueba ${fmt(p.pm10.intervalo_p95.inferior, 2)}–${fmt(p.pm10.intervalo_p95.superior, 2)} µg/m³</div>
+      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm2_5.error_tipico, 2)} · rango empírico P95 validación ${fmt(p.pm2_5.intervalo_p95.inferior, 2)}–${fmt(p.pm2_5.intervalo_p95.superior, 2)} µg/m³</div>
+      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm10.error_tipico, 2)} · rango empírico P95 validación ${fmt(p.pm10.intervalo_p95.inferior, 2)}–${fmt(p.pm10.intervalo_p95.superior, 2)} µg/m³</div>
       <div>Cobertura de importancia<b>${fmt(d.cobertura.porcentaje, 1)} %</b>PM2.5 ${fmt(d.cobertura.por_objetivo.pm2_5, 0)} % · PM10 ${fmt(d.cobertura.por_objetivo.pm10, 0)} %</div>
       <div>Categoría ICA<b>${esc(a.categoria_ica)}</b>${esc(a.motivo)}</div></div>
       <p class="suave">Estimadas: ${d.entrada.estimadas.map((e) => `${esc(e.etiqueta)} ≈ ${fmt(e.valor, 2)}`).join(" · ") || "ninguna"} ·
@@ -400,13 +401,11 @@
     // Modo técnico: SHAP por variable para PM2.5 o PM10
     $$("#xai-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.objetivo === estado.objetivoTec)));
     const eTec = d.explicacion[estado.objetivoTec];
-    const items = eTec.contribuciones.map((c) => ({
-      etiqueta: c.etiqueta, valor: c.aporte,
-      tooltip: [["Valor", fmt(c.valor, 3)], ["Origen", c.origen], ["Aporte", fmtSigno(c.aporte) + " µg/m³"]],
+    const items = eTec.detalle.map((c) => ({
+      columna: c.columna, aporte: c.aporte, origen: c.origen,
     }));
-    items.push({ etiqueta: "Calendario", valor: eTec.calendario.aporte, tooltip: [["Promedio", "12 meses x 7 días"]] });
     if (document.body.classList.contains("modo-tecnico"))
-      window.Graficos.barrasDivergentes($("#grafico-barras"), items);
+      window.Graficos.cascadaSHAP($("#grafico-cascada"), eTec.valor_base, eTec.prediccion, items);
     const v = eTec.verificacion_aditiva;
     $("#xai-ecuacion").innerHTML = `Base E[f(X)] ${fmt(eTec.valor_base, 3)} + suma de aportes ${fmtSigno(v.base_mas_aportes - eTec.valor_base, 3)}
       = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${icono(v.ok ? "checkCircle" : "triangleAlert", "icon")} ${v.ok ? "aditividad TreeSHAP verificada" : "revisar aditividad TreeSHAP"}`;
@@ -424,6 +423,48 @@
     xgboost: "#2a78d6", desplegado: "#2a78d6", lightgbm: "#eb6834", random_forest: "#1baf7a",
     persistencia: "#6f6d68", media_movil: "#a8a69e", media_historica: "#cfcdc5",
   };
+
+  async function abrirFichaModelo() {
+    const dialogo = $("#ficha-modelo");
+    const contenido = $("#ficha-modelo-contenido");
+    dialogo.showModal();
+    $("#estado-modelo").setAttribute("aria-expanded", "true");
+    contenido.innerHTML = `<p class="suave">Cargando ficha técnica…</p>`;
+    try {
+      if (!estado.fichaModelo) {
+        const respuesta = await fetch(CONFIG.api.estado, { credentials: "same-origin" });
+        if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
+        estado.fichaModelo = await respuesta.json();
+        if (!estado.fichaModelo.ok) throw new Error("No se pudo obtener el estado de los modelos.");
+      }
+      const datos = estado.fichaModelo;
+      const nombreAlgoritmo = {
+        XGBRegressor: "XGBoost Regressor",
+        GradientBoostingRegressor: "Gradient Boosting Regressor",
+        RandomForestRegressor: "Random Forest Regressor",
+        LGBMRegressor: "LightGBM Regressor",
+      };
+      contenido.innerHTML = datos.listo
+        ? `<div class="ficha-modelo__rejilla">${Object.entries(datos.modelos).map(([clave, modelo]) => {
+          const metrica = modelo.metricas_validacion;
+          return `<article class="ficha-modelo__objetivo">
+            <h3>${clave === "pm2_5" ? "PM₂.₅" : "PM₁₀"}</h3>
+            <p><b>Algoritmo:</b> ${esc(nombreAlgoritmo[modelo.tipo] || modelo.tipo)}</p>
+            <p><b>Validación cronológica (n = ${metrica.muestras}):</b></p>
+            <ul>
+              <li>R² = ${fmt(metrica.r2, 3)}</li>
+              <li>RMSE = ${fmt(metrica.rmse, 2)} µg/m³</li>
+              <li>MAE = ${fmt(metrica.mae, 2)} µg/m³</li>
+            </ul>
+          </article>`;
+        }).join("")}</div>`
+        : `<p class="aviso">${esc(datos.error || "Los modelos no están disponibles.")}</p>`;
+    } catch (error) {
+      contenido.innerHTML = `<p class="aviso">No se pudo cargar la ficha técnica. ${esc(error.message)}</p>`;
+    }
+  }
+  $("#cerrar-ficha-modelo").addEventListener("click", () => $("#ficha-modelo").close());
+  $("#ficha-modelo").addEventListener("close", () => $("#estado-modelo").setAttribute("aria-expanded", "false"));
 
   async function cargarBenchmark() {
     if (estado.benchmark) return pintarConfiable();
@@ -495,10 +536,19 @@
         <b>${etiqueta}: ${fmt(p.valor, 2)} µg/m³</b>
         <span>Rango predictivo empírico P95: ${fmt(p.intervalo_p95.inferior, 2)}–${fmt(p.intervalo_p95.superior, 2)} µg/m³</span>
       </div>`;
-      return `<section class="tarjeta resumen-fiabilidad" aria-labelledby="resumen-fiabilidad-titulo">
+      return `<section class="tarjeta resumen-fiabilidad tec" aria-labelledby="resumen-fiabilidad-titulo">
         <h2 id="resumen-fiabilidad-titulo">Predicción y calidad de los datos</h2>
         <div class="incertidumbre__predicciones">
           ${prediccion("PM₂.₅", d.predicciones.pm2_5)}${prediccion("PM₁₀", d.predicciones.pm10)}
+        </div>
+        <div class="incertidumbre__metricas">
+          ${Object.entries(d.predicciones).map(([id, p]) => {
+            const m = b.metricas_validacion[id];
+            return `<div><b>${id === "pm2_5" ? "PM₂.₅" : "PM₁₀"}</b>
+              <span>Validación: MAE ${fmt(m.mae, 2)} · RMSE ${fmt(m.rmse, 2)} µg/m³ · R² ${fmt(m.r2, 3)}</span>
+              <span>Prueba: MAE ${fmt(p.error_tipico, 2)} · RMSE ${fmt(p.rmse_prueba, 2)} µg/m³</span>
+            </div>`;
+          }).join("")}
         </div>
         <div class="completitud">
           <div class="completitud__valor">Completitud de datos: <b>${comp.ingresadas} de ${comp.total} variables (${fmt(comp.porcentaje, 0)} %)</b></div>
@@ -508,7 +558,7 @@
         <p class="suave">${imputadas
           ? `${imputadas} ${imputadas === 1 ? "variable imputada" : "variables imputadas"} mediante ${metodoImputacion}.`
           : "No se imputaron variables: todos los datos disponibles fueron ingresados."}</p>
-        <p class="suave">El rango P95 se estima con errores absolutos del conjunto de prueba cronológico reservado. Es orientativo: no es un intervalo de confianza garantizado y el error puede variar con el tiempo y las condiciones.</p>
+        <p class="suave">Rango predictivo empírico nominal P95, calibrado con errores absolutos de validación cronológica. No es un intervalo de confianza de parámetros ni una cobertura garantizada; los errores pueden cambiar con el tiempo y las condiciones.</p>
       </section>`;
     })() : `<section class="tarjeta resumen-fiabilidad"><h2>Predicción y calidad de los datos</h2>
       <p class="suave">Ingresa datos en el simulador para ver la predicción, su rango empírico y la completitud.</p></section>`;
@@ -548,6 +598,7 @@
   }
   const pie = $("#estado-modelo");
   $(".punto", pie).classList.add(CONFIG.listo ? "ok" : "error");
+  pie.addEventListener("click", abrirFichaModelo);
   $("#mini-estado").addEventListener("click", () => $(".escena-tarjeta").scrollIntoView({ behavior: "smooth", block: "center" }));
   $(".nav-item__txt", pie).textContent = CONFIG.listo ? "Modelo listo" : "Modelo no disponible";
   if (!CONFIG.listo) mostrarAviso("La interfaz está disponible, pero las predicciones no. " + (CONFIG.error_carga || ""));

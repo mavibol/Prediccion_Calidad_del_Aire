@@ -154,9 +154,10 @@ El JSON trae mucho más de lo que se muestra. La interfaz usa solo el bloque `si
 - **Atribuciones TreeSHAP**: separa los aportes negativos, que disminuyen el valor predicho, de los positivos, que lo incrementan; muestra hasta tres por grupo. Cada tarjeta presenta el aporte firmado en µg/m³ y una barra cuya longitud compara la magnitud absoluta de los factores visibles. También se muestran el valor base E[f(X)] y la predicción. La interpretación es relativa al modelo y no implica causalidad.
 - **Estado de cada dato** («por encima de lo saludable», «más alto de lo normal», «normal», «más bajo de lo normal») con la guía OMS y los percentiles 10 y 90 de la ciudad. Si el estado contradice el efecto (p. ej., un valor bajo que el modelo asocia con más contaminación), se omite el estado para no confundir.
 - **Completitud** como cantidad y porcentaje de variables ingresadas sobre las nueve disponibles. Se distingue explícitamente de la cobertura de importancia SHAP, que es ponderada y no representa el porcentaje de sensores presentes.
-- **Rango predictivo empírico P95** calculado con el percentil 95 de los errores absolutos en el conjunto de prueba cronológico reservado. Es una referencia observada, no un intervalo de confianza garantizado; el desempeño puede cambiar con el tiempo y las condiciones.
+- **Rango predictivo empírico P95** calibrado con el percentil de orden finito de los errores absolutos en el conjunto de validación cronológico. No es un intervalo de confianza de parámetros ni una cobertura garantizada; los errores pueden cambiar con el tiempo y las condiciones.
 - **Imputación**: se informa cuántas variables faltaban y el método aplicado (imputación iterativa aprendida del entrenamiento o mediana histórica, según configuración).
-- **Modo técnico**: muestra las cifras, el gráfico SHAP por variable y la comprobación aditiva para evaluadores.
+- **Modo técnico**: muestra la cascada interactiva con aportes SHAP por característica, la comprobación de aditividad y MAE/RMSE de validación y prueba.
+- **Ficha del modelo**: el botón de estado de la barra lateral abre el algoritmo cargado y sus métricas MAE/RMSE/R², medidas en la partición de validación cronológica.
 
 ---
 

@@ -83,6 +83,9 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertContains(r, "Atribución calculada mediante")
         self.assertContains(r, "SHapley Additive exPlanations")
         self.assertContains(r, "E[f(X)]")
+        self.assertContains(r, 'id="ficha-modelo"')
+        self.assertContains(r, 'id="grafico-cascada"')
+        self.assertContains(r, "Modo técnico")
 
     def test_catalogo_solo_variables_del_dataset(self):
         datos = self.client.get("/api/variables/").json()
@@ -123,7 +126,8 @@ class PrediccionTests(BaseConModelos):
             self.assertLessEqual(intervalo["inferior"], pred["valor"])
             self.assertGreaterEqual(intervalo["superior"], pred["valor"])
             self.assertGreater(pred["margen_p95"], 0)
-            self.assertIn("prueba cronológico", intervalo["referencia"])
+            self.assertIn("validación cronológico", intervalo["referencia"])
+            self.assertGreater(pred["rmse_prueba"], 0)
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
         self.assertIn(d["alerta"]["nivel"], [n["id"] for n in cat.NIVELES])
 
@@ -205,6 +209,20 @@ class PrediccionTests(BaseConModelos):
         d = self.client.get("/api/benchmark/").json()
         self.assertTrue(d["ok"])
         self.assertEqual(d["tesis"]["particion"]["entrenamiento"], 906)
+        for clave in cat.OBJETIVOS:
+            metricas = d["metricas_validacion"][clave]
+            self.assertGreater(metricas["muestras"], 0)
+            self.assertGreater(metricas["mae"], 0)
+            self.assertGreater(metricas["rmse"], 0)
+            self.assertIn("r2", metricas)
+
+    def test_estado_expone_ficha_de_modelo_y_metricas(self):
+        d = self.client.get("/api/estado/").json()
+        self.assertTrue(d["ok"])
+        self.assertEqual(set(d["modelos"]), set(cat.OBJETIVOS))
+        for modelo in d["modelos"].values():
+            self.assertTrue(modelo["tipo"])
+            self.assertGreater(modelo["metricas_validacion"]["muestras"], 0)
 
 
 class SinModelosTests(TestCase):

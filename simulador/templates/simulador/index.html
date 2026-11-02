@@ -38,9 +38,9 @@
         <span class="interruptor-tec__pista" aria-hidden="true"></span>
         <span class="nav-item__txt">Modo técnico</span>
       </label>
-      <div class="sidebar__estado" id="estado-modelo" aria-live="polite">
+      <button class="sidebar__estado" id="estado-modelo" type="button" aria-haspopup="dialog" aria-controls="ficha-modelo" aria-expanded="false" aria-live="polite">
         <span class="punto" aria-hidden="true"></span><span class="nav-item__txt">Cargando…</span>
-      </div>
+      </button>
     </div>
   </aside>
   <div class="velo" id="velo" hidden></div>
@@ -157,8 +157,9 @@
             <button role="tab" type="button" data-objetivo="pm2_5" aria-selected="true">PM2.5</button>
             <button role="tab" type="button" data-objetivo="pm10" aria-selected="false">PM10</button>
           </div>
-          <h3>Aporte SHAP por variable (µg/m³)</h3>
-          <div class="grafico" id="grafico-barras"></div>
+          <h3>Cascada de aportes SHAP exactos (µg/m³)</h3>
+          <p class="suave">Cada paso suma o resta una característica desde el valor base hasta la predicción. Enfoca o apunta a una barra para ver el aporte exacto y su origen.</p>
+          <div class="grafico waterfall-grafico" id="grafico-cascada"></div>
           <div class="ecuacion" id="xai-ecuacion"></div>
         </div>
       </div>
@@ -170,6 +171,15 @@
     </section>
   </main>
 </div>
+
+<dialog class="ficha-modelo" id="ficha-modelo" aria-labelledby="ficha-modelo-titulo">
+  <div class="ficha-modelo__cabecera">
+    <div><h2 id="ficha-modelo-titulo">Ficha técnica del modelo</h2>
+      <p class="suave">Algoritmo y métricas calculadas sobre datos de validación cronológica.</p></div>
+    <button class="btn btn--fantasma ficha-modelo__cerrar" id="cerrar-ficha-modelo" type="button" aria-label="Cerrar ficha técnica">Cerrar</button>
+  </div>
+  <div id="ficha-modelo-contenido" aria-live="polite"></div>
+</dialog>
 
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
 

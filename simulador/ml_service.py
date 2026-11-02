@@ -26,6 +26,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost.core import XGBoostError
 
 from .ml import catalogo as cat
@@ -256,17 +257,32 @@ class ServicioML:
             self.importancia[clave] = dict(zip(obj.canonicas, imp.tolist()))
 
     def _error_tipico(self):
-        """Calcula MAE y margen P95 con los errores del conjunto de prueba reservado."""
-        self.mae_prueba, self.margen_p95_prueba = {}, {}
+        """Calcula métricas de validación/prueba y calibra un margen P95 en validación."""
+        self.mae_prueba, self.rmse_prueba = {}, {}
+        self.metricas_validacion, self.margen_p95_validacion = {}, {}
         for clave, obj in self.objetivos.items():
-            X = self.test[obj.canonicas].copy()
-            X.columns = obj.columnas
-            errores = np.abs(obj.modelo.predict(X.astype(float)) - self.test[f"y_{clave}"].to_numpy())
+            X_val = self.val[obj.canonicas].copy()
+            X_val.columns = obj.columnas
+            y_val = self.val[f"y_{clave}"].to_numpy()
+            pred_val = obj.modelo.predict(X_val.astype(float))
+            errores = np.abs(pred_val - y_val)
             if not len(errores):
-                raise ValueError(f"No hay datos de prueba para estimar el error de {clave}.")
-            self.mae_prueba[clave] = float(np.mean(errores))
+                raise ValueError(f"No hay datos de validación para calibrar el error de {clave}.")
+            self.metricas_validacion[clave] = {
+                "mae": float(mean_absolute_error(y_val, pred_val)),
+                "rmse": float(np.sqrt(mean_squared_error(y_val, pred_val))),
+                "r2": float(r2_score(y_val, pred_val)),
+                "muestras": len(y_val),
+            }
             orden = min(len(errores), math.ceil((len(errores) + 1) * 0.95))
-            self.margen_p95_prueba[clave] = float(np.sort(errores)[orden - 1])
+            self.margen_p95_validacion[clave] = float(np.sort(errores)[orden - 1])
+
+            X_test = self.test[obj.canonicas].copy()
+            X_test.columns = obj.columnas
+            y_test = self.test[f"y_{clave}"].to_numpy()
+            pred_test = obj.modelo.predict(X_test.astype(float))
+            self.mae_prueba[clave] = float(mean_absolute_error(y_test, pred_test))
+            self.rmse_prueba[clave] = float(np.sqrt(mean_squared_error(y_test, pred_test)))
 
     @property
     def listo(self) -> bool:
@@ -395,15 +411,17 @@ class ServicioML:
                                                      actual, previo, estimadas, fuera,
                                                      error_aditivo)
             n_ica = nivel_ica(clave, pred)
-            margen_p95 = self.margen_p95_prueba[clave]
+            margen_p95 = self.margen_p95_validacion[clave]
             predicciones[clave] = {
                 "valor": round(pred, 2),
                 "error_tipico": round(self.mae_prueba[clave], 2),
+                "rmse_prueba": round(self.rmse_prueba[clave], 2),
                 "margen_p95": round(margen_p95, 2),
                 "intervalo_p95": {
                     "inferior": round(max(0.0, pred - margen_p95), 2),
                     "superior": round(pred + margen_p95, 2),
-                    "referencia": "errores absolutos en el conjunto de prueba cronológico",
+                    "nivel_nominal": 95,
+                    "referencia": "errores absolutos en el conjunto de validación cronológico",
                 },
                 "valor_base": round(base, 2),
                 "nivel": n_ica["id"], "nivel_etiqueta": n_ica["etiqueta"],
@@ -571,17 +589,20 @@ class ServicioML:
         ruta = self.dir_modelos / "benchmark_modelos.json"
         calculado = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None
         return {"calculado": calculado, "tesis": cat.RESULTADOS_TESIS,
-                "modelo_en_uso": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()}}
+                "modelo_en_uso": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()},
+                "metricas_validacion": getattr(self, "metricas_validacion", {})}
 
     def estado(self) -> dict:
         return {
             "listo": self.listo, "error": self.error_carga,
             "modelos": {k: {"archivo": o.archivo, "tipo": type(o.modelo).__name__,
-                            "explicador": o.explicador.nombre, "variables": len(o.columnas)}
+                            "explicador": o.explicador.nombre, "variables": len(o.columnas),
+                            "metricas_validacion": getattr(self, "metricas_validacion", {}).get(k)}
                         for k, o in self.objetivos.items()},
             "imputacion": self.metodo_imputacion,
             "p90": self.p90,
             "mae_prueba": getattr(self, "mae_prueba", {}),
+            "rmse_prueba": getattr(self, "rmse_prueba", {}),
         }
 
 

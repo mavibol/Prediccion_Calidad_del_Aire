@@ -3,7 +3,7 @@
    ---------------------------------------------------------------------
    · escena()            fondo semántico que cambia con el nivel del aire
    · diana()             tiro al blanco: entre más cerca del centro, menos falla
-   · barrasDivergentes() aportes SHAP (solo en modo técnico)
+   · cascadaSHAP()      descomposición interactiva base → predicción
    ===================================================================== */
 (function () {
   "use strict";
@@ -120,29 +120,79 @@
     });
   }
 
-  // ===================================================================
-  // 3. BARRAS DIVERGENTES (modo técnico): aporte SHAP por variable
-  // ===================================================================
-  function barrasDivergentes(contenedor, items, { unidad = "µg/m³" } = {}) {
-    const W = 760, colEtq = 170, fila = 30, H = items.length * fila + 30;
+  function cascadaSHAP(contenedor, base, prediccion, items, { unidad = "µg/m³" } = {}) {
+    const W = 940, margenIzq = 250, margenDer = 125, altoFila = 29;
+    const filas = items.length + 2;
+    const alto = filas * altoFila + 46;
+    const recorrido = [];
+    let acumulado = base;
+    for (const item of items) {
+      const inicio = acumulado;
+      acumulado += item.aporte;
+      recorrido.push({ ...item, inicio, fin: acumulado });
+    }
+
+    const extremos = [0, base, prediccion, ...recorrido.flatMap((item) => [item.inicio, item.fin])];
+    let minimo = Math.min(...extremos), maximo = Math.max(...extremos);
+    const margen = (maximo - minimo || 1) * .06;
+    minimo -= margen;
+    maximo += margen;
+    const x = (v) => margenIzq + ((v - minimo) / (maximo - minimo)) * (W - margenIzq - margenDer);
+    const colorFavorable = getComputedStyle(document.documentElement).getPropertyValue("--aporte-favorable").trim();
+    const colorDesfavorable = getComputedStyle(document.documentElement).getPropertyValue("--aporte-desfavorable").trim();
     contenedor.innerHTML = "";
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Aportes SHAP" }, contenedor);
-    const maxAbs = Math.max(...items.map((i) => Math.abs(i.valor)), 0.01);
-    const x = (v) => colEtq + 10 + ((v + maxAbs) / (2 * maxAbs)) * (W - colEtq - 80);
-    const css = getComputedStyle(document.documentElement);
-    const cSube = css.getPropertyValue("--aporte-desfavorable").trim(), cBaja = css.getPropertyValue("--aporte-favorable").trim();
-    [-maxAbs, maxAbs].forEach((v) => texto(svg, x(v), H - 6, fmtSigno(v, 1), { "text-anchor": "middle", class: "t-tenue" }));
-    items.forEach((it, i) => {
-      const y = 6 + i * fila;
-      const g = el("g", {}, svg);
-      texto(g, colEtq, y + 15, it.etiqueta, { "text-anchor": "end", class: "t-fuerte" });
-      const x0 = x(0), x1 = x(it.valor);
-      el("rect", { x: Math.min(x0, x1), y: y + 3, width: Math.max(Math.abs(x1 - x0), 1), height: 16, rx: 3, fill: it.valor >= 0 ? cSube : cBaja }, g);
-      texto(g, it.valor >= 0 ? x1 + 6 : x1 - 6, y + 16, fmtSigno(it.valor), { "text-anchor": it.valor >= 0 ? "start" : "end" });
-      conTooltip(g, it.etiqueta, it.tooltip || []);
+    const svg = el("svg", {
+      viewBox: `0 0 ${W} ${alto}`,
+      role: "img",
+      "aria-label": `Cascada SHAP: valor base ${fmt(base, 4)}, ${items.length} aportes y predicción ${fmt(prediccion, 4)} ${unidad}`,
+    }, contenedor);
+
+    const pasos = 5;
+    for (let i = 0; i <= pasos; i++) {
+      const valor = minimo + (maximo - minimo) * i / pasos;
+      const pos = x(valor);
+      el("line", { x1: pos, x2: pos, y1: 0, y2: alto - 34, class: "rejilla" }, svg);
+      texto(svg, pos, alto - 8, fmt(valor, 2), { "text-anchor": "middle", class: "t-tenue" });
+    }
+    el("line", { x1: x(0), x2: x(0), y1: 0, y2: alto - 34, class: "linea-cero" }, svg);
+
+    const filaBarra = (y, inicio, fin, color, etiqueta, valor, tooltip) => {
+      const g = el("g", { class: "waterfall__item" }, svg);
+      texto(g, margenIzq - 12, y + 17, etiqueta, { "text-anchor": "end", class: "t-fuerte" });
+      const x0 = x(Math.min(inicio, fin)), x1 = x(Math.max(inicio, fin));
+      el("rect", {
+        x: x0, y: y + 5, width: Math.max(1, x1 - x0), height: 17, rx: 3, fill: color,
+      }, g);
+      texto(g, W - 8, y + 17, fmt(valor, 4), { "text-anchor": "end", class: "t-fuerte" });
+      if (tooltip) conTooltip(g, etiqueta, tooltip);
+      return g;
+    };
+
+    let y = 4;
+    filaBarra(y, 0, base, "#82918b", "Base E[f(X)]", base, [
+      ["Valor base", `${fmt(base, 4)} ${unidad}`],
+    ]);
+    y += altoFila;
+    recorrido.forEach((item, index) => {
+      const color = item.aporte < 0 ? colorFavorable : colorDesfavorable;
+      if (index > 0) {
+        el("line", {
+          x1: x(item.inicio), x2: x(item.inicio),
+          y1: y - altoFila + 22, y2: y + 5, class: "waterfall__conector",
+        }, svg);
+      }
+      filaBarra(y, item.inicio, item.fin, color, item.columna, item.aporte, [
+        ["Aporte SHAP", `${fmtSigno(item.aporte, 4)} ${unidad}`],
+        ["Origen", item.origen],
+        ["Valor acumulado", `${fmt(item.fin, 4)} ${unidad}`],
+      ]);
+      y += altoFila;
     });
-    el("line", { x1: x(0), x2: x(0), y1: 0, y2: H - 20, class: "linea-cero" }, svg);
+    filaBarra(y, 0, prediccion, "#1c5cab", "Predicción", prediccion, [
+      ["Predicción", `${fmt(prediccion, 4)} ${unidad}`],
+      ["Base + suma SHAP", `${fmt(base + items.reduce((suma, item) => suma + item.aporte, 0), 4)} ${unidad}`],
+    ]);
   }
 
-  window.Graficos = { escena, diana, barrasDivergentes, fmt, fmtSigno };
+  window.Graficos = { escena, diana, cascadaSHAP, fmt, fmtSigno };
 })();
