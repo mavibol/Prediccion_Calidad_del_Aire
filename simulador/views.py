@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from .ml_service import ErrorValidacion, ModelosNoDisponibles, obtener_servicio
+from .ml.catalogo import MAXIMO_VALOR_ENTRADA
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def inicio(request):
             },
             "listo": servicio.listo,
             "error_carga": servicio.error_carga,
+            "maximo_valor_entrada": MAXIMO_VALOR_ENTRADA,
         },
     }
     return render(request, "simulador/index.html", contexto)

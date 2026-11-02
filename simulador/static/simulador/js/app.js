@@ -30,7 +30,7 @@
     const s = String(txt ?? "").trim().replace(/\s/g, "");
     if (s === "") return null;
     const n = s.includes(",") && s.includes(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(",", ".");
-    return /^\d*\.?\d+$/.test(n) ? Number(n) : NaN;
+    return /^-?\d*\.?\d+$/.test(n) ? Number(n) : NaN;
   }
   const decimales = (v) => (v.max < 5 ? 2 : v.max < 100 ? 1 : 0);
   const memoria = {
@@ -151,7 +151,9 @@
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
         <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor exacto de ${esc(v.simple_nombre)}"
+               aria-describedby="dato-error-${id}"
                value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
+        <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
 
@@ -165,10 +167,23 @@
 
     num.addEventListener("input", () => {
       const x = aNumero(num.value);
-      const malo = x === null || !Number.isFinite(x) || x < 0;
+      const error = x === null
+        ? ""
+        : !Number.isFinite(x)
+          ? "Escribe un número válido."
+          : x < 0
+            ? "El valor no puede ser negativo."
+            : x > CONFIG.maximo_valor_entrada
+              ? `El valor no puede superar ${fmt(CONFIG.maximo_valor_entrada, 0)} ${v.unidad}.`
+              : "";
+      const malo = Boolean(error);
       num.toggleAttribute("aria-invalid", malo);
       num.style.borderColor = malo ? "var(--ensucia)" : "";
+      const errorEl = $(`#dato-error-${id}`, li);
+      errorEl.textContent = error;
+      errorEl.hidden = !malo;
       if (malo) return;
+      if (x === null) return;
       pintarEstado(x);
       programarCalculo(500);
     });
@@ -225,7 +240,7 @@
     const variables = [];
     for (const [id, li] of estado.filas) {
       const x = aNumero($(".dato__num", li).value);
-      if (x === null || Number.isNaN(x)) return null; // el campo ya quedó marcado en rojo
+      if (x === null || !Number.isFinite(x) || x < 0 || x > CONFIG.maximo_valor_entrada) return null;
       variables.push({ variable: id, valor: x });
     }
     return variables.length ? { variables } : null;

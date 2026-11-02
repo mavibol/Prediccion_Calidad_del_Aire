@@ -329,6 +329,11 @@ class ServicioML:
                     continue  # el modelo no usa el día previo de esta variable
                 if x < 0:
                     raise ErrorValidacion(f"{etq} no puede ser negativo.")
+                if x > cat.MAXIMO_VALOR_ENTRADA:
+                    raise ErrorValidacion(
+                        f"{etq} no puede superar {fmt(cat.MAXIMO_VALOR_ENTRADA, 0)} "
+                        f"{cat.VARIABLES[v]['unidad']}."
+                    )
                 destino[v] = x
         return actual, previo, avisos
 

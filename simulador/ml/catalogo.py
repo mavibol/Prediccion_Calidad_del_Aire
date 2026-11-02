@@ -102,6 +102,8 @@ VARIABLES = {
     },
 }
 
+MAXIMO_VALOR_ENTRADA = 1000.0
+
 # Alias aceptados al leer nombres de columnas de un modelo exportado desde
 # Colab (por si allí se usaron nombres cortos como "NO2_lag1" o "pm25_lag1").
 ALIAS_VARIABLES = {
