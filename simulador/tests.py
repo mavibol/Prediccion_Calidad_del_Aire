@@ -232,6 +232,17 @@ class PrediccionTests(BaseConModelos):
             self.assertGreater(metricas["mae"], 0)
             self.assertGreater(metricas["rmse"], 0)
             self.assertIn("r2", metricas)
+            self.assertEqual(sum(map(sum, metricas["matriz_confusion"]), 0), metricas["muestras"])
+            self.assertGreaterEqual(metricas["exactitud_categoria_pct"], 0)
+            self.assertLessEqual(metricas["exactitud_categoria_pct"], 100)
+            self.assertEqual(len(metricas["matriz_confusion"]), len(cat.NIVELES))
+            self.assertEqual(len(metricas["etiquetas_categoria"]), len(cat.NIVELES))
+        self.assertIn("Open-Meteo", d["fuente_datos"])
+        self.assertLessEqual(d["periodo_datos"]["inicio"], d["periodo_datos"]["fin"])
+        self.assertIsNotNone(d["exactitud_categoria_pct"])
+        self.assertGreaterEqual(d["exactitud_categoria_pct"], 0)
+        self.assertLessEqual(d["exactitud_categoria_pct"], 100)
+        self.assertEqual(d["particion"]["entrenamiento"], 906)
 
     def test_estado_expone_ficha_de_modelo_y_metricas(self):
         d = self.client.get("/api/estado/").json()

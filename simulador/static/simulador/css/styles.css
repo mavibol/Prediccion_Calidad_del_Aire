@@ -305,6 +305,20 @@ body.modo-tecnico #tec-simulador.tec { max-height: 1200px; margin-top: 0; paddin
 .xai-nota { font-size: 13px; }
 
 /* ---------- 7. ¿Es confiable? ---------- */
+.validacion-resumen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.validacion-kpi { display: grid; grid-template-columns: 38px minmax(0, 1fr); grid-template-areas: "icon title" "value value" "description description" "source source"; align-content: start; gap: 7px 10px; padding: 18px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); box-shadow: var(--sombra); }
+.validacion-kpi__icono { grid-area: icon; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--acento-suave); color: var(--acento); }
+.validacion-kpi__icono .icon { width: 23px; height: 23px; }
+.validacion-kpi h2 { grid-area: title; align-self: center; font-size: 15px; }
+.validacion-kpi > strong { grid-area: value; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--tinta); }
+.validacion-kpi > span:not(.validacion-kpi__icono) { grid-area: description; color: var(--tinta-2); font-size: 13.5px; line-height: 1.45; }
+.validacion-kpi small { grid-area: source; color: var(--tinta-3); font-size: 11.5px; line-height: 1.4; }
+.validacion-limites { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.validacion-limites article { padding: 16px 18px; border: 1px solid var(--borde); border-radius: 14px; background: var(--superficie); }
+.validacion-limites article:first-child { border-left: 4px solid var(--n0); }
+.validacion-limites article:last-child { border-left: 4px solid var(--n1); }
+.validacion-limites h2 { font-size: 16px; }
+.validacion-limites p { margin: 6px 0 0; color: var(--tinta-2); font-size: 14px; line-height: 1.5; }
 .rejilla-conf { display: grid; grid-template-columns: minmax(300px, 1.1fr) 1fr; gap: 22px; align-items: start; }
 @media (max-width: 960px) { .rejilla-conf { grid-template-columns: 1fr; } }
 .resumen-fiabilidad { margin-bottom: 22px; }
@@ -342,6 +356,24 @@ body.modo-tecnico #tec-simulador.tec { max-height: 1200px; margin-top: 0; paddin
 .ficha-modelo__objetivo h3 { margin-bottom: 10px; }
 .ficha-modelo__objetivo p { margin: 6px 0; }
 .ficha-modelo__objetivo ul { margin: 8px 0 0; padding-left: 22px; font-variant-numeric: tabular-nums; }
+.validacion-formal { margin-top: 22px; }
+.validacion-formal > h2 { font-size: 20px; }
+.validacion-formal__muestras { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0 18px; color: var(--tinta-2); font-size: 13px; }
+.validacion-formal__muestras b { color: var(--tinta); }
+.matrices-confusion { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 14px; }
+.matriz-confusion { min-width: 0; padding: 14px; border: 1px solid var(--borde); border-radius: 14px; background: var(--superficie); }
+.matriz-confusion h4 { margin: 0; font-size: 15px; }
+.matriz-confusion > p { margin: 4px 0 10px; color: var(--tinta-2); font-size: 12.5px; }
+.matriz-confusion__scroll { overflow-x: auto; }
+.matriz-confusion__tabla { min-width: 520px; font-size: 11.5px !important; }
+.matriz-confusion__tabla caption { padding: 4px 0 8px; color: var(--tinta-3); text-align: left; }
+.matriz-confusion__tabla th, .matriz-confusion__tabla td { padding: 6px 5px !important; }
+.matriz-confusion__tabla td.destacada { background: var(--acento-suave); font-weight: 700; }
+.validacion-formal__comparacion { margin-top: 18px; overflow-x: auto; }
+@media (max-width: 760px) {
+  .validacion-resumen { grid-template-columns: 1fr; }
+  .validacion-limites { grid-template-columns: 1fr; }
+}
 
 /* ---------- 8. Técnico ---------- */
 .segmentado { display: inline-flex; background: var(--superficie-2); border-radius: 10px; padding: 3px; margin-bottom: 14px; }

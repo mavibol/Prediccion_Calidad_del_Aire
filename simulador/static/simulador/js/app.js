@@ -558,10 +558,15 @@
   async function cargarBenchmark() {
     if (estado.benchmark) return pintarConfiable();
     try {
-      estado.benchmark = await (await fetch(CONFIG.api.benchmark, { credentials: "same-origin" })).json();
+      const respuesta = await fetch(CONFIG.api.benchmark, { credentials: "same-origin" });
+      if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
+      const datos = await respuesta.json();
+      if (!datos.ok) throw new Error(datos.error || "La respuesta del servidor no contiene el benchmark.");
+      estado.benchmark = datos;
       pintarConfiable();
-    } catch {
-      $("#bm-contenido").innerHTML = `<div class="aviso">No se pudo cargar la comparación.</div>`;
+    } catch (error) {
+      console.error("No se pudo cargar la vista de precisión del modelo.", error);
+      $("#bm-contenido").innerHTML = `<div class="aviso" role="alert">No se pudo cargar la precisión del modelo. ${esc(error.message || "Comprueba la conexión e inténtalo de nuevo.")}</div>`;
     }
   }
 
@@ -598,7 +603,7 @@
     }
 
     const orden = [...modelos].sort((x, y) => x.mae - y.mae);
-    const tecTabla = calc ? `<div class="tarjeta tec" style="margin-top:22px">
+    const tecTabla = calc ? `<div class="validacion-formal__comparacion">
         <div class="segmentado" role="tablist" id="bm-tabs">
           <button role="tab" type="button" data-objetivo="pm2_5" aria-selected="${clave === "pm2_5"}">PM2.5</button>
           <button role="tab" type="button" data-objetivo="pm10" aria-selected="${clave === "pm10"}">PM10</button></div>
@@ -613,6 +618,22 @@
         </tbody></table>
         <p class="suave">${b.calculado.sustituto ? `${icono("triangleAlert", "icon")} Calculado con un sustituto de XGBoost (scikit-learn). ` : ""}Tesis (prueba): XGBoost MAE ${fmt(b.tesis.prueba[1][clave].mae, 3)} · R² ${fmt(b.tesis.prueba[1][clave].r2, 3)}.
         El escenario B (mismo día) logra R² ${fmt(b.tesis.prueba[2][clave].r2, 3)}, pero describe el presente; el objetivo es anticipar.</p></div>` : "";
+
+    const metricasValidacion = b.metricas_validacion || {};
+    const matricesConfusion = Object.entries(metricasValidacion).map(([id, m]) => {
+      const etiquetas = m.etiquetas_categoria;
+      return `<article class="matriz-confusion">
+        <h4>${id === "pm2_5" ? "PM₂.₅" : "PM₁₀"} · validación (n = ${m.muestras})</h4>
+        <p>MAE ${fmt(m.mae, 2)} µg/m³ · RMSE ${fmt(m.rmse, 2)} µg/m³ · R² ${fmt(m.r2, 3)} · acierto de categoría ${fmt(m.exactitud_categoria_pct, 1)} %</p>
+        <div class="matriz-confusion__scroll">
+          <table class="tabla matriz-confusion__tabla">
+            <caption>Filas: categoría observada. Columnas: categoría predicha.</caption>
+            <thead><tr><th>Observada ↓ / Predicha →</th>${etiquetas.map((e) => `<th>${esc(e)}</th>`).join("")}</tr></thead>
+            <tbody>${m.matriz_confusion.map((fila, i) => `<tr><th scope="row">${esc(etiquetas[i])}</th>${fila.map((valor, j) => `<td class="num ${i === j ? "destacada" : ""}">${valor}</td>`).join("")}</tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </article>`;
+    }).join("");
 
     const d = estado.resultado;
     const resumenActual = d ? (() => {
@@ -652,7 +673,54 @@
     })() : `<section class="tarjeta resumen-fiabilidad"><h2>Predicción y calidad de los datos</h2>
       <p class="suave">Ingresa datos en el simulador para ver la predicción, su rango empírico y la completitud.</p></section>`;
 
-    $("#bm-contenido").innerHTML = `${resumenActual}
+    const maeValidacion = Object.values(metricasValidacion).map((m) => m.mae);
+    const precisionCategoria = b.exactitud_categoria_pct;
+    const tasaAcierto = Number.isFinite(precisionCategoria)
+      ? `<strong>${fmt(precisionCategoria, 0)} %</strong><span>En ${fmt(precisionCategoria, 0)} % de los días de validación, acertó las categorías de PM₂.₅ y PM₁₀.</span>`
+      : `<strong>No disponible</strong><span>Se requiere el modelo y su conjunto de validación para calcular el acierto.</span>`;
+    const rangoError = maeValidacion.length
+      ? `<strong>${fmt(Math.min(...maeValidacion), 1)}–${fmt(Math.max(...maeValidacion), 1)} µg/m³</strong><span>Diferencia absoluta promedio frente a los valores observados en validación.</span>`
+      : `<strong>No disponible</strong><span>No hay métricas de error disponibles.</span>`;
+    const periodo = b.periodo_datos;
+    const aniosHistoricos = periodo ? periodo.dias / 365.2425 : null;
+    const datosHistoricos = periodo
+      ? `<strong>${fmt(aniosHistoricos, 1)} años</strong><span>Registros diarios Open-Meteo / CAMS · ${esc(periodo.inicio)} a ${esc(periodo.fin)}.</span>`
+      : `<strong>No disponible</strong><span>No se encontró el periodo del conjunto histórico.</span>`;
+    const resumenPublico = `<section class="validacion-resumen" aria-label="Resumen de la validación">
+      <article class="validacion-kpi">
+        <span class="validacion-kpi__icono">${icono("target", "icon")}</span>
+        <h2>Nivel de acierto general</h2>
+        ${tasaAcierto}
+      </article>
+      <article class="validacion-kpi">
+        <span class="validacion-kpi__icono">${icono("ruler", "icon")}</span>
+        <h2>Margen de variación típico</h2>
+        ${rangoError}
+      </article>
+      <article class="validacion-kpi">
+        <span class="validacion-kpi__icono">${icono("air", "icon")}</span>
+        <h2>Base de aprendizaje</h2>
+        ${datosHistoricos}
+        <small>Registros de Open-Meteo/CAMS; no son lecturas en tiempo real de estaciones oficiales.</small>
+      </article>
+    </section>
+    <section class="validacion-limites" aria-label="Alcance y límites del modelo">
+      <article><h2>✓ Dónde funciona mejor</h2><p>En días normales y con condiciones climáticas habituales, similares a los registros usados para validarlo.</p></article>
+      <article><h2>! Casos especiales</h2><p>Ante eventos atípicos, como pólvora en fechas festivas o incendios forestales, consulta las alertas y fuentes de emergencia locales.</p></article>
+    </section>`;
+    const formal = `<section class="tarjeta tec validacion-formal" aria-labelledby="validacion-formal-titulo">
+      <h2 id="validacion-formal-titulo">Métricas formales de validación estadística</h2>
+      <p class="suave">Evaluación cronológica independiente del entrenamiento.</p>
+      <div class="validacion-formal__muestras">
+        <span>Entrenamiento: <b>${b.particion.entrenamiento}</b></span>
+        <span>Validación: <b>${b.particion.validacion}</b></span>
+        <span>Prueba: <b>${b.particion.prueba}</b></span>
+      </div>
+      <div class="matrices-confusion">${matricesConfusion || `<p class="suave">Métricas no disponibles.</p>`}</div>
+      ${tecTabla}
+    </section>`;
+
+    $("#bm-contenido").innerHTML = `${resumenPublico}${resumenActual}
       <div class="rejilla-conf">
         <div class="tarjeta diana" id="diana"></div>
         <div>
@@ -672,7 +740,7 @@
           <span>Responde al instante y te dice por qué.</span></div>
         ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">${icono("triangleAlert", "icon")}</span><b>Su límite</b>
           <span>Le cuesta anticipar los días más contaminados.</span></div>` : ""}
-      </div>${tecTabla}`;
+      </div>${formal}`;
 
     window.Graficos.diana($("#diana"), modelos);
     $$("#bm-tabs button").forEach((bt) => bt.addEventListener("click", () => { estado.objetivoTec = bt.dataset.objetivo; pintarConfiable(); }));

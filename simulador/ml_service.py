@@ -146,6 +146,7 @@ class ServicioML:
         self.metodo_imputacion = imputacion
         self.objetivos: dict[str, ModeloObjetivo] = {}
         self.error_carga: str | None = None
+        self.acierto_categoria_por_dia: dict[str, np.ndarray] = {}
         self._cargar_datos()
         try:
             self._cargar_modelos()
@@ -166,6 +167,11 @@ class ServicioML:
         df = cargar_y_limpiar(self.ruta_csv)
         mat = construir_features(df)
         self.train, self.val, self.test = particion_cronologica(mat)
+        self.periodo_datos = {
+            "inicio": df.index.min().date().isoformat(),
+            "fin": df.index.max().date().isoformat(),
+            "dias": int((df.index.max() - df.index.min()).days + 1),
+        }
         dias_train = df.loc[self.train.index.min() - pd.Timedelta(days=2):self.train.index.max()]
         self.dias_train = dias_train[VARIABLES_BASE]
         self.stats = {}
@@ -260,6 +266,8 @@ class ServicioML:
         """Calcula métricas de validación/prueba y calibra un margen P95 en validación."""
         self.mae_prueba, self.rmse_prueba = {}, {}
         self.metricas_validacion, self.margen_p95_validacion = {}, {}
+        self.acierto_categoria_por_dia = {}
+        etiquetas_nivel = [nivel["id"] for nivel in cat.NIVELES]
         for clave, obj in self.objetivos.items():
             X_val = self.val[obj.canonicas].copy()
             X_val.columns = obj.columnas
@@ -268,11 +276,26 @@ class ServicioML:
             errores = np.abs(pred_val - y_val)
             if not len(errores):
                 raise ValueError(f"No hay datos de validación para calibrar el error de {clave}.")
+            posiciones = {etiqueta: i for i, etiqueta in enumerate(etiquetas_nivel)}
+            matriz_confusion = [[0 for _ in etiquetas_nivel] for _ in etiquetas_nivel]
+            coincidencias_categoria = []
+            for real, estimado in zip(y_val, pred_val):
+                clase_real = nivel_ica(clave, float(real))["id"]
+                clase_estimada = nivel_ica(clave, float(estimado))["id"]
+                matriz_confusion[posiciones[clase_real]][posiciones[clase_estimada]] += 1
+                coincidencias_categoria.append(clase_real == clase_estimada)
+            aciertos_categoria = sum(matriz_confusion[i][i] for i in range(len(etiquetas_nivel)))
+            self.acierto_categoria_por_dia[clave] = np.asarray(coincidencias_categoria, dtype=bool)
             self.metricas_validacion[clave] = {
                 "mae": float(mean_absolute_error(y_val, pred_val)),
                 "rmse": float(np.sqrt(mean_squared_error(y_val, pred_val))),
                 "r2": float(r2_score(y_val, pred_val)),
                 "muestras": len(y_val),
+                "aciertos_categoria": aciertos_categoria,
+                "exactitud_categoria_pct": aciertos_categoria / len(y_val) * 100,
+                "clases_categoria": etiquetas_nivel,
+                "etiquetas_categoria": [nivel["etiqueta"] for nivel in cat.NIVELES],
+                "matriz_confusion": matriz_confusion,
             }
             orden = min(len(errores), math.ceil((len(errores) + 1) * 0.95))
             self.margen_p95_validacion[clave] = float(np.sort(errores)[orden - 1])
@@ -594,7 +617,21 @@ class ServicioML:
     def benchmark(self) -> dict:
         ruta = self.dir_modelos / "benchmark_modelos.json"
         calculado = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None
+        acierto_conjunto = None
+        if all(k in self.acierto_categoria_por_dia for k in cat.OBJETIVOS):
+            acierto_conjunto = np.logical_and.reduce(
+                [self.acierto_categoria_por_dia[k] for k in cat.OBJETIVOS])
         return {"calculado": calculado, "tesis": cat.RESULTADOS_TESIS,
+                "fuente_datos": "Open-Meteo / CAMS",
+                "periodo_datos": self.periodo_datos,
+                "particion": {
+                    "entrenamiento": len(self.train),
+                    "validacion": len(self.val),
+                    "prueba": len(self.test),
+                },
+                "exactitud_categoria_pct": (
+                    float(np.mean(acierto_conjunto) * 100) if acierto_conjunto is not None else None
+                ),
                 "modelo_en_uso": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()},
                 "metricas_validacion": getattr(self, "metricas_validacion", {})}
 
