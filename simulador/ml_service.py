@@ -19,21 +19,19 @@ import json
 import logging
 import math
 import threading
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost.core import XGBoostError
 
 from .ml import catalogo as cat
 from .ml.datos import (VARIABLES_BASE, cargar_y_limpiar, columnas_escenario_a,
                        construir_features, fila_desde_lecturas, particion_cronologica)
 from .ml.explicadores import crear_explicador
-from .ml.narrativa import construir_narrativa, explicacion_simple, fmt
+from .ml.narrativa import explicacion_simple, fmt
 
 log = logging.getLogger(__name__)
 
@@ -146,7 +144,6 @@ class ServicioML:
         self.metodo_imputacion = imputacion
         self.objetivos: dict[str, ModeloObjetivo] = {}
         self.error_carga: str | None = None
-        self.acierto_categoria_por_dia: dict[str, np.ndarray] = {}
         self._cargar_datos()
         try:
             self._cargar_modelos()
@@ -166,12 +163,7 @@ class ServicioML:
     def _cargar_datos(self):
         df = cargar_y_limpiar(self.ruta_csv)
         mat = construir_features(df)
-        self.train, self.val, self.test = particion_cronologica(mat)
-        self.periodo_datos = {
-            "inicio": df.index.min().date().isoformat(),
-            "fin": df.index.max().date().isoformat(),
-            "dias": int((df.index.max() - df.index.min()).days + 1),
-        }
+        self.train, _, _ = particion_cronologica(mat)
         dias_train = df.loc[self.train.index.min() - pd.Timedelta(days=2):self.train.index.max()]
         self.dias_train = dias_train[VARIABLES_BASE]
         self.stats = {}
@@ -239,7 +231,6 @@ class ServicioML:
                 clave, modelo, columnas, canonicas,
                     crear_explicador(modelo, columnas), archivo_modelo)
         self._importancia_global()
-        self._error_tipico()
 
     def _matriz(self, obj: ModeloObjetivo, filas: list[dict]) -> pd.DataFrame:
         """Filas canónicas -> DataFrame con los nombres y el orden del modelo."""
@@ -250,8 +241,7 @@ class ServicioML:
     def _importancia_global(self):
         """|SHAP| medio por variable en una muestra de entrenamiento.
 
-        Sirve para dos cosas: ordenar el selector y medir la "cobertura"
-        de información que aporta el usuario.
+        Ordena el selector de variables según su relevancia para el modelo.
         """
         muestra = self.train.iloc[::6]  # ~150 días repartidos en el periodo
         self.importancia = {}
@@ -261,51 +251,6 @@ class ServicioML:
             _, S = obj.explicador.explicar(X.astype(float))
             imp = np.abs(S).mean(axis=0)
             self.importancia[clave] = dict(zip(obj.canonicas, imp.tolist()))
-
-    def _error_tipico(self):
-        """Calcula métricas de validación/prueba y calibra un margen P95 en validación."""
-        self.mae_prueba, self.rmse_prueba = {}, {}
-        self.metricas_validacion, self.margen_p95_validacion = {}, {}
-        self.acierto_categoria_por_dia = {}
-        etiquetas_nivel = [nivel["id"] for nivel in cat.NIVELES]
-        for clave, obj in self.objetivos.items():
-            X_val = self.val[obj.canonicas].copy()
-            X_val.columns = obj.columnas
-            y_val = self.val[f"y_{clave}"].to_numpy()
-            pred_val = obj.modelo.predict(X_val.astype(float))
-            errores = np.abs(pred_val - y_val)
-            if not len(errores):
-                raise ValueError(f"No hay datos de validación para calibrar el error de {clave}.")
-            posiciones = {etiqueta: i for i, etiqueta in enumerate(etiquetas_nivel)}
-            matriz_confusion = [[0 for _ in etiquetas_nivel] for _ in etiquetas_nivel]
-            coincidencias_categoria = []
-            for real, estimado in zip(y_val, pred_val):
-                clase_real = nivel_ica(clave, float(real))["id"]
-                clase_estimada = nivel_ica(clave, float(estimado))["id"]
-                matriz_confusion[posiciones[clase_real]][posiciones[clase_estimada]] += 1
-                coincidencias_categoria.append(clase_real == clase_estimada)
-            aciertos_categoria = sum(matriz_confusion[i][i] for i in range(len(etiquetas_nivel)))
-            self.acierto_categoria_por_dia[clave] = np.asarray(coincidencias_categoria, dtype=bool)
-            self.metricas_validacion[clave] = {
-                "mae": float(mean_absolute_error(y_val, pred_val)),
-                "rmse": float(np.sqrt(mean_squared_error(y_val, pred_val))),
-                "r2": float(r2_score(y_val, pred_val)),
-                "muestras": len(y_val),
-                "aciertos_categoria": aciertos_categoria,
-                "exactitud_categoria_pct": aciertos_categoria / len(y_val) * 100,
-                "clases_categoria": etiquetas_nivel,
-                "etiquetas_categoria": [nivel["etiqueta"] for nivel in cat.NIVELES],
-                "matriz_confusion": matriz_confusion,
-            }
-            orden = min(len(errores), math.ceil((len(errores) + 1) * 0.95))
-            self.margen_p95_validacion[clave] = float(np.sort(errores)[orden - 1])
-
-            X_test = self.test[obj.canonicas].copy()
-            X_test.columns = obj.columnas
-            y_test = self.test[f"y_{clave}"].to_numpy()
-            pred_test = obj.modelo.predict(X_test.astype(float))
-            self.mae_prueba[clave] = float(mean_absolute_error(y_test, pred_test))
-            self.rmse_prueba[clave] = float(np.sqrt(mean_squared_error(y_test, pred_test)))
 
     @property
     def listo(self) -> bool:
@@ -407,14 +352,13 @@ class ServicioML:
     def predecir(self, payload) -> dict:
         if not self.listo:
             raise ModelosNoDisponibles(self.error_carga or "Modelos no cargados.")
-        t0 = time.perf_counter()
         actual, previo, avisos = self.validar(payload)
         completo, estimadas = self.imputar(actual)
 
         # La simulación es agnóstica al tiempo: se evalúa el mismo estado del
         # aire en las 84 combinaciones mes × día de la semana y se promedia.
         # Como SHAP es aditivo, el promedio de las explicaciones explica el
-        # promedio de las predicciones (la verificación se hace abajo).
+        # promedio de las predicciones.
         filas = [fila_desde_lecturas(completo, previo, m, d) for m in MESES for d in DIAS]
 
         fuera = [cat.VARIABLES[v]["etiqueta"] for v, x in actual.items()
@@ -427,40 +371,22 @@ class ServicioML:
                           + ", ".join(fuera)
                           + ". La predicción puede ser menos confiable fuera del rango de entrenamiento.")
 
-        predicciones, explicaciones, cobertura = {}, {}, {}
+        predicciones, explicaciones = {}, {}
         for clave, obj in self.objetivos.items():
             X = self._matriz(obj, filas)
             pred = float(np.mean(obj.modelo.predict(X)))
-            base, S = obj.explicador.explicar(X)
+            _, S = obj.explicador.explicar(X)
             phi = S.mean(axis=0)
-            error_aditivo = abs(base + phi.sum() - pred)
 
-            explicaciones[clave] = self._explicacion(obj, clave, pred, base, phi, completo,
-                                                     actual, previo, estimadas, fuera,
-                                                     error_aditivo)
+            explicaciones[clave] = self._explicacion(
+                obj, clave, pred, phi, completo, estimadas)
             n_ica = nivel_ica(clave, pred)
-            margen_p95 = self.margen_p95_validacion[clave]
             predicciones[clave] = {
                 "valor": round(pred, 2),
-                "error_tipico": round(self.mae_prueba[clave], 2),
-                "rmse_prueba": round(self.rmse_prueba[clave], 2),
-                "margen_p95": round(margen_p95, 2),
-                "intervalo_p95": {
-                    "inferior": round(max(0.0, pred - margen_p95), 2),
-                    "superior": round(pred + margen_p95, 2),
-                    "nivel_nominal": 95,
-                    "referencia": "errores absolutos en el conjunto de validación cronológico",
-                },
-                "valor_base": round(base, 2),
-                "nivel": n_ica["id"], "nivel_etiqueta": n_ica["etiqueta"],
-                "supera_p90": bool(pred > self.p90[clave]),
-                "p90": round(self.p90[clave], 2),
-                "umbral_oms": cat.VARIABLES[clave]["umbral_seguro"],
+                "nivel": n_ica["id"],
             }
-            cobertura[clave] = self._cobertura(obj, clave, actual, previo)
 
         alerta = self._alerta(predicciones, actual)
-        cob_media = float(np.mean(list(cobertura.values())))
         return {
             "ok": True,
             "entrada": {
@@ -478,98 +404,32 @@ class ServicioML:
                     "porcentaje": round(len(actual) / len(VARIABLES_BASE) * 100, 1),
                 },
             },
-            "cobertura": {
-                "porcentaje": round(cob_media * 100, 1),
-                "por_objetivo": {k: round(c * 100, 1) for k, c in cobertura.items()},
-                "nivel": "alta" if cob_media >= .75 else "media" if cob_media >= .4 else "baja",
-                "puntos": max(1, min(5, math.ceil(cob_media * 5))),
-            },
             "predicciones": predicciones,
             "alerta": alerta,
             "recomendaciones": self._recomendaciones(alerta["nivel"]),
             "explicacion": explicaciones,
             "avisos": avisos,
-            "tecnico": {
-                "algoritmo": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()},
-                "explicador": {k: o.explicador.nombre for k, o in self.objetivos.items()},
-                "filas_calendario": len(filas),
-                "imputacion": "iterativa" if self.imputador is not None else "mediana",
-                "latencia_ms": round((time.perf_counter() - t0) * 1000, 1),
-            },
         }
 
-    def _explicacion(self, obj, clave, pred, base, phi, completo, actual, previo,
-                     estimadas, fuera, error_aditivo) -> dict:
-        etq_obj = cat.OBJETIVOS[clave]["etiqueta"]
-        detalle, por_var = [], {}
+    def _explicacion(self, obj, clave, pred, phi, completo, estimadas) -> dict:
+        por_var = {}
         for col_can, aporte in zip(obj.canonicas, phi):
             var = variable_de(col_can)
-            transf = col_can.rsplit("_", 1)[1] if var != "calendario" else col_can
-            if var == "calendario":
-                origen = "calendario"
-            elif var in estimadas:
-                origen = "estimada"
-            elif transf in ("lag2", "ma3", "delta") and var not in previo:
-                origen = "supuesta"   # derivada asumiendo persistencia
-            else:
-                origen = "ingresada"
-            detalle.append({"columna": col_can, "variable": var, "transformacion": transf,
-                            "origen": origen, "aporte": round(float(aporte), 4)})
             por_var[var] = por_var.get(var, 0.0) + float(aporte)
 
         contribs = []
         for v in VARIABLES_BASE:
-            meta, st = cat.VARIABLES[v], self.stats[v]
+            meta = cat.VARIABLES[v]
             contribs.append({
-                "variable": v, "etiqueta": meta["etiqueta"], "nombre_largo": meta["nombre_largo"],
-                "grupo": meta["grupo"], "unidad": meta["unidad"],
-                "valor": round(completo[v], 4), "valor_previo": previo.get(v),
+                "variable": v, "etiqueta": meta["etiqueta"], "unidad": meta["unidad"],
+                "valor": round(completo[v], 4),
                 "origen": "estimada" if v in estimadas else "ingresada",
-                "mediana": st["mediana"], "umbral_seguro": meta["umbral_seguro"],
-                "fuente_umbral": meta["fuente_umbral"],
                 "aporte": round(por_var.get(v, 0.0), 4),
             })
-        cal = por_var.get("calendario", 0.0)
-        total_abs = sum(abs(c["aporte"]) for c in contribs) + abs(cal) or 1.0
-        for c in contribs:
-            c["porcentaje"] = round(abs(c["aporte"]) / total_abs * 100, 1)
-        contribs.sort(key=lambda c: -abs(c["aporte"]))
-
-        grupos = {}
-        for c in contribs:
-            grupos[c["grupo"]] = grupos.get(c["grupo"], 0.0) + c["aporte"]
-        grupos["Calendario"] = cal
 
         return {
-            "objetivo": etq_obj,
-            "valor_base": round(base, 3), "prediccion": round(pred, 3),
-            "contribuciones": contribs,
-            "calendario": {"aporte": round(cal, 4),
-                           "porcentaje": round(abs(cal) / total_abs * 100, 1)},
-            "grupos": [{"grupo": g, "aporte": round(a, 4)} for g, a in grupos.items()],
-            "detalle": sorted(detalle, key=lambda d: -abs(d["aporte"])),
-            "narrativa": construir_narrativa(etq_obj, pred, base, contribs, cal, fuera),
-            "simple": explicacion_simple(contribs, pred, base, self.stats, cat.SENCILLO),
-            "verificacion_aditiva": {
-                "base_mas_aportes": round(base + float(np.sum(phi)), 4),
-                "prediccion": round(pred, 4), "error": float(f"{error_aditivo:.2e}"),
-                "ok": bool(error_aditivo < 1e-3),
-            },
+            "simple": explicacion_simple(contribs, pred, self.stats, cat.SENCILLO),
         }
-
-    def _cobertura(self, obj, clave, actual, previo) -> float:
-        """Fracción de la importancia global que proviene de datos reales del usuario."""
-        imp = self.importancia[clave]
-        total = sum(val for c, val in imp.items() if variable_de(c) != "calendario") or 1.0
-        aportada = 0.0
-        for c, val in imp.items():
-            var = variable_de(c)
-            if var == "calendario" or var not in actual:
-                continue
-            transf = c.rsplit("_", 1)[1]
-            if transf == "lag1" or var in previo:
-                aportada += val
-        return aportada / total
 
     def _alerta(self, predicciones: dict, actual: dict) -> dict:
         """Semáforo = el peor entre (a) el pronóstico y (b) tus lecturas actuales de PM.
@@ -593,7 +453,8 @@ class ServicioML:
             motivo = (f"Determinado por tu lectura actual de {etq} ({fmt(valor)} µg/m³), "
                       f"categoría ICA «{nivel['categoria_ica']}»; el pronóstico es menor, "
                       "pero el aire de ahora ya merece esta precaución.")
-        criticos = [cat.OBJETIVOS[k]["etiqueta"] for k, p in predicciones.items() if p["supera_p90"]]
+        criticos = [cat.OBJETIVOS[k]["etiqueta"] for k, p in predicciones.items()
+                    if p["valor"] > self.p90[k]]
         return {
             "nivel": nivel["id"], "orden": nivel["orden"], "etiqueta": nivel["etiqueta"],
             "categoria_ica": nivel["categoria_ica"], "color": nivel["color"],
@@ -613,43 +474,6 @@ class ServicioML:
         return [{**a, "estado": recs[a["id"]][0], "texto": recs[a["id"]][1],
                  "corto": cortas[a["id"]]} for a in cat.ACTIVIDADES]
 
-    # ---- 7. Benchmark -----------------------------------------------------
-    def benchmark(self) -> dict:
-        ruta = self.dir_modelos / "benchmark_modelos.json"
-        calculado = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None
-        acierto_conjunto = None
-        if all(k in self.acierto_categoria_por_dia for k in cat.OBJETIVOS):
-            acierto_conjunto = np.logical_and.reduce(
-                [self.acierto_categoria_por_dia[k] for k in cat.OBJETIVOS])
-        return {"calculado": calculado, "tesis": cat.RESULTADOS_TESIS,
-                "fuente_datos": "Open-Meteo / CAMS",
-                "periodo_datos": self.periodo_datos,
-                "particion": {
-                    "entrenamiento": len(self.train),
-                    "validacion": len(self.val),
-                    "prueba": len(self.test),
-                },
-                "exactitud_categoria_pct": (
-                    float(np.mean(acierto_conjunto) * 100) if acierto_conjunto is not None else None
-                ),
-                "modelo_en_uso": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()},
-                "metricas_validacion": getattr(self, "metricas_validacion", {})}
-
-    def estado(self) -> dict:
-        return {
-            "listo": self.listo, "error": self.error_carga,
-            "modelos": {k: {"archivo": o.archivo, "tipo": type(o.modelo).__name__,
-                            "explicador": o.explicador.nombre, "variables": len(o.columnas),
-                            "metricas_validacion": getattr(self, "metricas_validacion", {}).get(k)}
-                        for k, o in self.objetivos.items()},
-            "imputacion": self.metodo_imputacion,
-            "p90": self.p90,
-            "mae_prueba": getattr(self, "mae_prueba", {}),
-            "rmse_prueba": getattr(self, "rmse_prueba", {}),
-        }
-
-
-# ---------------------------------------------------------------------------
 # Singleton perezoso y seguro para hilos
 # ---------------------------------------------------------------------------
 _servicio: ServicioML | None = None

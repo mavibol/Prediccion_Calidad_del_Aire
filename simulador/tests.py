@@ -80,12 +80,16 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertContains(r, 'id="catalogo-variables"')
         self.assertContains(r, 'id="lista-variables"')
         self.assertContains(r, "csrf-token")
-        self.assertContains(r, "Atribución calculada mediante")
-        self.assertContains(r, "SHapley Additive exPlanations")
-        self.assertContains(r, "E[f(X)]")
-        self.assertContains(r, 'id="ficha-modelo"')
-        self.assertContains(r, 'id="grafico-cascada"')
-        self.assertContains(r, "Modo técnico")
+        self.assertContains(r, "Factores que ayudan a limpiar el aire")
+        self.assertContains(r, "Factores que aumentan la contaminación")
+        self.assertNotContains(r, "Modo técnico")
+        self.assertNotContains(r, "Precisión del Modelo")
+        self.assertNotContains(r, 'id="ficha-modelo"')
+        self.assertNotContains(r, 'id="grafico-cascada"')
+
+    def test_endpoints_de_metricas_tecnicas_no_estan_disponibles(self):
+        self.assertEqual(self.client.get("/api/benchmark/").status_code, 404)
+        self.assertEqual(self.client.get("/api/estado/").status_code, 404)
 
     def test_catalogo_solo_variables_del_dataset(self):
         datos = self.client.get("/api/variables/").json()
@@ -111,7 +115,7 @@ class PaginaYCatalogoTests(BaseConModelos):
 
 
 class PrediccionTests(BaseConModelos):
-    def test_subconjunto_de_variables_y_shap_aditivo(self):
+    def test_subconjunto_de_variables_y_explicacion_publica(self):
         r = self.predecir([{"variable": "pm2_5", "valor": "21,5"},
                            {"variable": "nitrogen_dioxide", "valor": 18}])
         self.assertEqual(r.status_code, 200)
@@ -121,19 +125,11 @@ class PrediccionTests(BaseConModelos):
         self.assertEqual(d["entrada"]["completitud"], {
             "ingresadas": 2, "total": len(cat.VARIABLES), "porcentaje": 22.2,
         })
-        self.assertEqual(d["tecnico"]["imputacion"], "iterativa")
-        self.assertEqual(set(d["tecnico"]["algoritmo"]), {"pm2_5", "pm10"})
-        self.assertTrue(all(d["tecnico"]["algoritmo"].values()))
+        self.assertNotIn("tecnico", d)
+        self.assertNotIn("cobertura", d)
         for clave in ("pm2_5", "pm10"):
-            self.assertTrue(d["explicacion"][clave]["verificacion_aditiva"]["ok"])
-            self.assertEqual(len(d["explicacion"][clave]["detalle"]), 21)
-            pred = d["predicciones"][clave]
-            intervalo = pred["intervalo_p95"]
-            self.assertLessEqual(intervalo["inferior"], pred["valor"])
-            self.assertGreaterEqual(intervalo["superior"], pred["valor"])
-            self.assertGreater(pred["margen_p95"], 0)
-            self.assertIn("validación cronológico", intervalo["referencia"])
-            self.assertGreater(pred["rmse_prueba"], 0)
+            self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel"})
+            self.assertEqual(set(d["explicacion"][clave]), {"simple"})
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
         self.assertIn(d["alerta"]["nivel"], [n["id"] for n in cat.NIVELES])
 
@@ -143,21 +139,18 @@ class PrediccionTests(BaseConModelos):
         for k in ("cara", "titulo", "frase"):
             self.assertTrue(a[k])
         s = d["explicacion"][a["contaminante"]]["simple"]
-        self.assertTrue(s["frase"].startswith("El valor predicho"))
         self.assertLessEqual(len(s["desfavorables"]), 3)
         self.assertLessEqual(len(s["favorables"]), 3)
-        self.assertAlmostEqual(s["valor_base"], d["explicacion"][a["contaminante"]]["valor_base"], places=3)
-        self.assertAlmostEqual(s["prediccion"], d["explicacion"][a["contaminante"]]["prediccion"], places=3)
+        self.assertAlmostEqual(
+            s["prediccion"], d["predicciones"][a["contaminante"]]["valor"], delta=0.011)
         self.assertTrue(all(f["aporte"] >= 0 for f in s["desfavorables"]))
         self.assertTrue(all(f["aporte"] <= 0 for f in s["favorables"]))
         for f in s["desfavorables"] + s["favorables"]:
             self.assertIn("µg/m³", f["unidad"])
             self.assertIn("—", f["nombre"])
-        self.assertIn(d["cobertura"]["puntos"], range(1, 6))
         self.assertTrue(all(len(r["corto"].split()) <= 6 for r in d["recomendaciones"]))
 
-    def test_mas_variables_mas_cobertura(self):
-        una = self.predecir([{"variable": "pm2_5", "valor": 15}]).json()
+    def test_todas_las_variables_evitan_estimaciones(self):
         todas = self.predecir([{"variable": v, "valor": cat_v, "valor_previo": cat_v}
                                for v, cat_v in [("pm2_5", 15), ("pm10", 20),
                                                 ("carbon_monoxide", 400),
@@ -165,8 +158,6 @@ class PrediccionTests(BaseConModelos):
                                                 ("sulphur_dioxide", 4), ("ozone", 55),
                                                 ("aerosol_optical_depth", 0.24),
                                                 ("dust", 0), ("uv_index", 1.8)]]).json()
-        self.assertGreater(todas["cobertura"]["porcentaje"], una["cobertura"]["porcentaje"])
-        self.assertAlmostEqual(todas["cobertura"]["porcentaje"], 100.0, places=0)
         self.assertEqual(todas["entrada"]["estimadas"], [])
         self.assertEqual(todas["entrada"]["completitud"]["ingresadas"], len(cat.VARIABLES))
         self.assertEqual(todas["entrada"]["completitud"]["porcentaje"], 100.0)
@@ -221,37 +212,6 @@ class PrediccionTests(BaseConModelos):
         cliente = Client(enforce_csrf_checks=True)
         r = self.predecir([{"variable": "pm2_5", "valor": 10}], client=cliente)
         self.assertEqual(r.status_code, 403)
-
-    def test_benchmark_incluye_resultados_tesis(self):
-        d = self.client.get("/api/benchmark/").json()
-        self.assertTrue(d["ok"])
-        self.assertEqual(d["tesis"]["particion"]["entrenamiento"], 906)
-        for clave in cat.OBJETIVOS:
-            metricas = d["metricas_validacion"][clave]
-            self.assertGreater(metricas["muestras"], 0)
-            self.assertGreater(metricas["mae"], 0)
-            self.assertGreater(metricas["rmse"], 0)
-            self.assertIn("r2", metricas)
-            self.assertEqual(sum(map(sum, metricas["matriz_confusion"]), 0), metricas["muestras"])
-            self.assertGreaterEqual(metricas["exactitud_categoria_pct"], 0)
-            self.assertLessEqual(metricas["exactitud_categoria_pct"], 100)
-            self.assertEqual(len(metricas["matriz_confusion"]), len(cat.NIVELES))
-            self.assertEqual(len(metricas["etiquetas_categoria"]), len(cat.NIVELES))
-        self.assertIn("Open-Meteo", d["fuente_datos"])
-        self.assertLessEqual(d["periodo_datos"]["inicio"], d["periodo_datos"]["fin"])
-        self.assertIsNotNone(d["exactitud_categoria_pct"])
-        self.assertGreaterEqual(d["exactitud_categoria_pct"], 0)
-        self.assertLessEqual(d["exactitud_categoria_pct"], 100)
-        self.assertEqual(d["particion"]["entrenamiento"], 906)
-
-    def test_estado_expone_ficha_de_modelo_y_metricas(self):
-        d = self.client.get("/api/estado/").json()
-        self.assertTrue(d["ok"])
-        self.assertEqual(set(d["modelos"]), set(cat.OBJETIVOS))
-        for modelo in d["modelos"].values():
-            self.assertTrue(modelo["tipo"])
-            self.assertGreater(modelo["metricas_validacion"]["muestras"], 0)
-
 
 class SinModelosTests(TestCase):
     def test_responde_503_si_faltan_modelos(self):

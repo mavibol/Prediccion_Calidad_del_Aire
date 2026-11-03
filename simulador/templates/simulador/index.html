@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Aire Claro · ¿Cómo estará el aire?</title>
-  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=4">
 </head>
 <body>
 <div class="app" id="app">
@@ -28,20 +28,7 @@
       <a href="#explicabilidad" class="nav-item" data-vista="explicabilidad">
         <span class="nav-item__icono" data-icon="search" aria-hidden="true"></span><span class="nav-item__txt">Factores del Aire</span>
       </a>
-      <a href="#modelos" class="nav-item" data-vista="modelos">
-        <span class="nav-item__icono" data-icon="target" aria-hidden="true"></span><span class="nav-item__txt">Precisión del Modelo</span>
-      </a>
     </nav>
-    <div class="sidebar__pie">
-      <label class="interruptor-tec" title="Muestra cifras y detalles para evaluadores">
-        <input type="checkbox" id="chk-tecnico">
-        <span class="interruptor-tec__pista" aria-hidden="true"></span>
-        <span class="nav-item__txt">Modo técnico</span>
-      </label>
-      <button class="sidebar__estado" id="estado-modelo" type="button" aria-haspopup="dialog" aria-controls="ficha-modelo" aria-expanded="false" aria-live="polite">
-        <span class="punto" aria-hidden="true"></span><span class="nav-item__txt">Cargando…</span>
-      </button>
-    </div>
   </aside>
   <div class="velo" id="velo" hidden></div>
 
@@ -119,7 +106,6 @@
               <div class="recomendaciones" id="recomendaciones"></div>
             </div>
 
-            <div class="tarjeta tec" id="tec-simulador"></div>
           </div>
         </div>
       </div>
@@ -138,10 +124,6 @@
           <p class="frase-grande" id="xai-frase"></p>
         </header>
         <div class="tarjeta tira">
-          <p class="xai-metodologia tec" title="Atribución calculada mediante TreeSHAP (SHapley Additive exPlanations) respecto al valor base E[f(X)].">
-            Atribución calculada mediante <strong>TreeSHAP</strong> (SHapley Additive exPlanations) respecto al valor base E[f(X)].
-          </p>
-          <p class="xai-resumen-base tec" id="xai-resumen-base"></p>
           <div class="tira__columnas">
             <section class="columna-xai">
               <h3 class="aporte-favorable__titulo">🟢 Factores que ayudan a limpiar el aire</h3>
@@ -155,41 +137,15 @@
           <p class="suave centro xai-nota" id="xai-nota"></p>
         </div>
 
-        <div class="tarjeta tec">
-          <div class="segmentado" role="tablist" id="xai-tabs">
-            <button role="tab" type="button" data-objetivo="pm2_5" aria-selected="true">PM2.5</button>
-            <button role="tab" type="button" data-objetivo="pm10" aria-selected="false">PM10</button>
-          </div>
-          <h3>Cascada de aportes SHAP exactos (µg/m³)</h3>
-          <p class="suave">Cada paso suma o resta una característica desde el valor base hasta la predicción. Enfoca o apunta a una barra para ver el aporte exacto y su origen.</p>
-          <div class="grafico waterfall-grafico" id="grafico-cascada"></div>
-          <div class="ecuacion" id="xai-ecuacion"></div>
-        </div>
       </div>
-    </section>
-
-    <!-- ---------- VISTA 3: ¿ES CONFIABLE? ---------- -->
-    <section class="vista" id="vista-modelos" hidden data-titulo="Precisión del modelo" data-sub="Validamos nuestras predicciones comparándolas con registros históricos de calidad del aire.">
-      <div id="bm-contenido"><p class="suave">Cargando…</p></div>
     </section>
   </main>
 </div>
 
-<dialog class="ficha-modelo" id="ficha-modelo" aria-labelledby="ficha-modelo-titulo">
-  <div class="ficha-modelo__cabecera">
-    <div><h2 id="ficha-modelo-titulo">Ficha técnica del modelo</h2>
-      <p class="suave">Algoritmo y métricas calculadas sobre datos de validación cronológica.</p></div>
-    <button class="btn btn--fantasma ficha-modelo__cerrar" id="cerrar-ficha-modelo" type="button" aria-label="Cerrar ficha técnica">Cerrar</button>
-  </div>
-  <div id="ficha-modelo-contenido" aria-live="polite"></div>
-</dialog>
-
-<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
-
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
 <script src="{% static 'simulador/js/icons.js' %}"></script>
-<script src="{% static 'simulador/js/charts.js' %}"></script>
-<script src="{% static 'simulador/js/app.js' %}"></script>
+<script src="{% static 'simulador/js/charts.js' %}?v=4"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=4"></script>
 </body>
 </html>

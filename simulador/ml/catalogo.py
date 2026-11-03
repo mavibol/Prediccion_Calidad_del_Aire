@@ -243,27 +243,7 @@ GRUPOS = {
 }
 
 # ---------------------------------------------------------------------------
-# 4. Resultados oficiales reportados en la tesis (Capítulo 3, conjunto de prueba)
-#    Se muestran en el comparador como referencia fija, junto al benchmark que
-#    recalcula scripts/construir_artefactos.py.
-# ---------------------------------------------------------------------------
-RESULTADOS_TESIS = {
-    "particion": {"entrenamiento": 906, "validacion": 194, "prueba": 194},
-    "prueba": [
-        {"modelo": "Persistencia (t−1)", "pm2_5": {"mae": 3.125, "r2": -0.003},
-         "pm10": {"mae": 3.242, "r2": -0.009}},
-        {"modelo": "A · Pronóstico 24 h (XGBoost)", "pm2_5": {"mae": 2.432, "r2": 0.339},
-         "pm10": {"mae": 2.558, "r2": 0.352}, "desplegado": True},
-        {"modelo": "B · Mismo día (LightGBM / XGBoost)", "pm2_5": {"mae": 1.798, "r2": 0.691},
-         "pm10": {"mae": 1.742, "r2": 0.696}},
-    ],
-    "validacion_xgb_a": {"pm2_5": {"mae": 2.74, "r2": 0.26}, "pm10": {"mae": 2.97, "r2": 0.26}},
-    "mejora_vs_persistencia": {"pm2_5": 22.2, "pm10": 21.1},
-    "criterio": "Ranking compuesto en validación (MAE + RMSE + R²)",
-}
-
-# ---------------------------------------------------------------------------
-# 5. Lenguaje para el público general (sin jerga técnica)
+# 4. Lenguaje para el público general (sin jerga técnica)
 # ---------------------------------------------------------------------------
 # nombre: forma sencilla de nombrarla · icono: clave SVG · que_es: una línea.
 SENCILLO = {
