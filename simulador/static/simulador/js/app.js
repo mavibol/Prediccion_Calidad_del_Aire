@@ -722,25 +722,26 @@
 
     $("#bm-contenido").innerHTML = `${resumenPublico}${resumenActual}
       <div class="rejilla-conf">
-        <div class="tarjeta diana" id="diana"></div>
-        <div>
+        <div class="tarjeta diana diana--compacta" id="diana"></div>
+        <div class="conf-explicacion">
           <p class="frase-grande">${icono("target", "icon")} Elegimos <b>${esc(elegido.nombre)}</b> porque es el que menos se equivoca.</p>
           <p class="suave">Cada dardo es una forma distinta de adivinar el aire de mañana. El centro es el acierto perfecto: entre más cerca, mejor adivina.</p>
           <ol class="podio-lista">${orden.map((m, i) => `<li class="${m.elegido ? "elegido" : ""}">
             <span class="medalla" aria-label="Puesto ${i + 1}">${i + 1}</span>${esc(m.nombre)}${m.elegido ? ` ${icono("star", "icon")}` : ""}
             <span class="pin" style="background:${m.color}" aria-hidden="true"></span></li>`).join("")}</ol>
+          <div class="insignias">
+            <div class="insignia"><span class="insignia__ico">${icono("target", "icon")}</span><b>Más certero</b>
+              <span>Falla ${fmt(mejora, 0)} % menos que «repetir lo de ayer».</span></div>
+            <div class="insignia"><span class="insignia__ico">${icono("ruler", "icon")}</span><b>Constante</b>
+              <span>${estab === 1 ? "Es el más parejo en las distintas épocas del año." : "Lo probamos en varias épocas del año y se mantuvo."}</span></div>
+            <div class="insignia"><span class="insignia__ico">${icono("bolt", "icon")}</span><b>Rápido y transparente</b>
+              <span>Responde al instante y te dice por qué.</span></div>
+            ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">${icono("triangleAlert", "icon")}</span><b>Su límite</b>
+              <span>Le cuesta anticipar los días más contaminados.</span></div>` : ""}
+          </div>
         </div>
       </div>
-      <div class="insignias">
-        <div class="insignia"><span class="insignia__ico">${icono("target", "icon")}</span><b>Más certero</b>
-          <span>Falla ${fmt(mejora, 0)} % menos que «repetir lo de ayer».</span></div>
-        <div class="insignia"><span class="insignia__ico">${icono("ruler", "icon")}</span><b>Constante</b>
-          <span>${estab === 1 ? "Es el más parejo en las distintas épocas del año." : "Lo probamos en varias épocas del año y se mantuvo."}</span></div>
-        <div class="insignia"><span class="insignia__ico">${icono("bolt", "icon")}</span><b>Rápido y transparente</b>
-          <span>Responde al instante y te dice por qué.</span></div>
-        ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">${icono("triangleAlert", "icon")}</span><b>Su límite</b>
-          <span>Le cuesta anticipar los días más contaminados.</span></div>` : ""}
-      </div>${formal}`;
+      ${formal}`;
 
     window.Graficos.diana($("#diana"), modelos);
     $$("#bm-tabs button").forEach((bt) => bt.addEventListener("click", () => { estado.objetivoTec = bt.dataset.objetivo; pintarConfiable(); }));
