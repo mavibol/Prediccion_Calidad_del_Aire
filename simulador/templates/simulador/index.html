@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Aire Claro · ¿Cómo estará el aire?</title>
-  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=4">
+  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=11">
 </head>
 <body>
 <div class="app" id="app">
@@ -77,33 +77,59 @@
         </div>
 
         <div class="panel-resultado" aria-live="polite">
-          <!-- Bienvenida: tres pasos -->
-          <div class="tarjeta bienvenida" id="bienvenida">
-            <div class="paso"><span class="paso__ico" data-icon="plus" aria-hidden="true"></span><b>Agrega un dato</b><span>Por ejemplo, el humo o el polvo.</span></div>
-            <div class="paso__flecha" data-icon="arrowRight" aria-hidden="true"></div>
-            <div class="paso"><span class="paso__ico" data-icon="ruler" aria-hidden="true"></span><b>Escribe el valor</b><span>Ingresa la cantidad que quieras.</span></div>
-            <div class="paso__flecha" data-icon="arrowRight" aria-hidden="true"></div>
-            <div class="paso"><span class="paso__ico" data-icon="eye" aria-hidden="true"></span><b>Mira el cielo</b><span>Cambia al instante.</span></div>
-          </div>
-
-          <div id="resultado" hidden>
+          <div id="resultado">
             <div class="tarjeta escena-tarjeta">
               <div class="escena" id="escena"></div>
-              <div class="veredicto" id="veredicto"></div>
-              <span class="escena__nota">Pronóstico para las próximas 24 horas</span>
+              <div class="veredicto" id="veredicto">
+                <span class="veredicto__ilustracion" data-ilustracion="cielo" aria-hidden="true"></span>
+                <span class="veredicto__estado">
+                  <span class="veredicto__titulo">Tu pronóstico aparecerá aquí</span>
+                </span>
+                <div class="veredicto__resumen">
+                  <span class="veredicto__medicion">
+                    <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
+                    <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+                  </span>
+                  <span class="veredicto__frase">Agrega datos para conocer el pronóstico.</span>
+                </div>
+              </div>
+              <span class="escena__nota"></span>
             </div>
 
-            <div class="escala" id="escala" aria-label="Escala de calidad del aire"></div>
+            <div class="escala" id="escala" aria-label="Escala de calidad del aire">
+              <div class="escala__pista" role="img" aria-label="Escala de calidad; se resaltará al calcular el pronóstico">
+                <span class="escala__tramo" style="--nivel-color:#0ca30c"></span>
+                <span class="escala__tramo" style="--nivel-color:#f2b005"></span>
+                <span class="escala__tramo" style="--nivel-color:#ec835a"></span>
+                <span class="escala__tramo" style="--nivel-color:#d03b3b"></span>
+                <span class="escala__tramo" style="--nivel-color:#7d3c98"></span>
+              </div>
+              <div class="escala__etiquetas" aria-hidden="true">
+                <span class="escala__etiqueta">Limpio</span>
+                <span class="escala__etiqueta">Aceptable</span>
+                <span class="escala__etiqueta">Regular</span>
+                <span class="escala__etiqueta">Contaminado</span>
+                <span class="escala__etiqueta">Peligroso</span>
+              </div>
+            </div>
             <div class="alerta-local" id="alerta-local" hidden></div>
 
-            <div class="fila-dos">
-              <div class="tarjeta precision" id="precision"></div>
-              <a class="tarjeta porque-mini" id="porque-mini" href="#explicabilidad"></a>
-            </div>
-
             <div class="tarjeta">
-              <h3>Para hoy</h3>
-              <div class="recomendaciones" id="recomendaciones"></div>
+              <h3>Recomendaciones para tu día</h3>
+              <div class="recomendaciones" id="recomendaciones" aria-live="polite">
+                <article class="rec-card rec-card--pendiente">
+                  <div class="rec-card__visual rec-card__visual--deporte"><span data-ilustracion="deporte" aria-hidden="true"></span></div>
+                  <div class="rec-card__contenido"><h4>Deporte</h4><strong class="rec-card__estado">Pendiente</strong><p>Agrega datos para ver la recomendación.</p></div>
+                </article>
+                <article class="rec-card rec-card--pendiente">
+                  <div class="rec-card__visual rec-card__visual--sensibles"><span data-ilustracion="sensibles" aria-hidden="true"></span></div>
+                  <div class="rec-card__contenido"><h4>Grupos sensibles</h4><strong class="rec-card__estado">Pendiente</strong><p>Agrega datos para ver la recomendación.</p></div>
+                </article>
+                <article class="rec-card rec-card--pendiente">
+                  <div class="rec-card__visual rec-card__visual--hogar"><span data-ilustracion="hogar" aria-hidden="true"></span></div>
+                  <div class="rec-card__contenido"><h4>Hogar</h4><strong class="rec-card__estado">Pendiente</strong><p>Agrega datos para ver la recomendación.</p></div>
+                </article>
+              </div>
             </div>
 
           </div>
@@ -112,31 +138,27 @@
     </section>
 
     <!-- ---------- VISTA 2: ¿POR QUÉ? ---------- -->
-    <section class="vista" id="vista-explicabilidad" hidden data-titulo="Factores del Aire" data-sub="Conoce los factores que ayudan a mantener el aire en niveles saludables para mañana.">
+    <section class="vista" id="vista-explicabilidad" hidden data-titulo="Factores del Aire" data-sub="Conoce qué está moviendo el aire de mañana, para bien o para mal.">
       <div class="tarjeta vacio-grande" id="xai-vacio">
         <span class="vacio-grande__ico" data-icon="search" aria-hidden="true"></span>
         <p>Primero agrega algún dato en <b>Mi aire</b>.</p>
         <a class="btn btn--primario" href="#simulador">Ir a Mi aire</a>
       </div>
       <div id="xai-contenido" hidden>
-        <header class="xai-cabecera">
-          <h2 class="xai-cabecera__titulo">¿Qué influye en el pronóstico de mañana?</h2>
-          <p class="frase-grande" id="xai-frase"></p>
-        </header>
-        <div class="tarjeta tira">
-          <div class="tira__columnas">
-            <section class="columna-xai">
-              <h3 class="aporte-favorable__titulo">🟢 Factores que ayudan a limpiar el aire</h3>
-              <div class="columna" id="col-favorables"></div>
-            </section>
-            <section class="columna-xai">
-              <h3 class="aporte-desfavorable__titulo">🔴 Factores que aumentan la contaminación</h3>
-              <div class="columna" id="col-desfavorables"></div>
-            </section>
-          </div>
+        <section class="tarjeta xai-panel">
+          <header class="xai-cabecera">
+            <div class="xai-cabecera__texto">
+              <h2 class="xai-cabecera__titulo">¿Por qué cambia el aire mañana?</h2>
+              <p class="frase-grande" id="xai-frase"></p>
+            </div>
+            <div class="xai-leyenda" aria-label="Significado de los colores">
+              <span><i class="xai-leyenda__punto xai-leyenda__punto--sube"></i> Sube la contaminación</span>
+              <span><i class="xai-leyenda__punto xai-leyenda__punto--baja"></i> Baja el pronóstico</span>
+            </div>
+          </header>
+          <div class="factores-grid" id="col-factores"></div>
           <p class="suave centro xai-nota" id="xai-nota"></p>
-        </div>
-
+        </section>
       </div>
     </section>
   </main>
@@ -145,7 +167,7 @@
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
 <script src="{% static 'simulador/js/icons.js' %}"></script>
-<script src="{% static 'simulador/js/charts.js' %}?v=4"></script>
-<script src="{% static 'simulador/js/app.js' %}?v=4"></script>
+<script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=12"></script>
 </body>
 </html>

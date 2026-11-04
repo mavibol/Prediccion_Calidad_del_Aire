@@ -6,8 +6,8 @@ Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, pr
 
 | Pantalla | Qué ve el usuario |
 |---|---|
-| **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un amplio rango de plausibilidad, independiente de los máximos observados en el dataset; el servidor rechaza valores fuera de esos límites. Todo se recalcula al instante: un fondo sutil cambia de tono según el nivel, un indicador vectorial marca el estado y aparecen 5 consejos. |
-| **¿Por qué?** (explicabilidad) | Explica en lenguaje cotidiano qué factores ayudan a mantener el aire limpio y cuáles pueden empeorarlo. Muestra los datos medidos o estimados y una barra comparativa de su influencia relativa. |
+| **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un amplio rango de plausibilidad, independiente de los máximos observados en el dataset; el servidor rechaza valores fuera de esos límites. El visualizador presenta el estado, el pronóstico de PM₂.₅ y una escala de calidad; tres tarjetas resumen recomendaciones para deporte, grupos sensibles y el hogar. |
+| **Factores del Aire** (explicabilidad) | Destaca una explicación narrativa de los factores con mayor influencia y organiza debajo los que ayudan a limpiar el aire y los que pueden aumentar la contaminación. Muestra los datos medidos o estimados y una barra comparativa de influencia relativa; la interpretación no implica causalidad. |
 
 El formulario usa nomenclatura formal (por ejemplo, PM₁₀ y PM₂.₅) y las unidades del dataset. Solo ofrece las nueve variables que realmente alimentan al modelo; temperatura, humedad relativa, radiación solar y velocidad del viento no forman parte del dataset/modelo actual.
 

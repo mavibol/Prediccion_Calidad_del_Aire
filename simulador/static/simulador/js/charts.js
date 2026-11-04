@@ -18,8 +18,7 @@
   // 1. ESCENA: fondo semántico sobrio, sin siluetas de edificios
   // ===================================================================
   const NIVEL_ESCENA = {
-    fondo:      ["#e7f4e9", "#f4f2df", "#fff0df", "#fbe8e6", "#eee8f5"],
-    sol:        [1, .85, .55, .3, .12],
+    fondo:      ["#e3efff", "#e8f1fb", "#f0f1f5", "#f8ecea", "#f0eafa"],
   };
 
   function escena(contenedor) {
@@ -31,17 +30,12 @@
     el("stop", { class: "tono-inicial", offset: "0%", "stop-color": NIVEL_ESCENA.fondo[0] }, gradiente);
     el("stop", { class: "tono-final", offset: "100%", "stop-color": "#fff" }, gradiente);
     el("rect", { class: "cielo", width: W, height: H, fill: "url(#fondo-aire)" }, svg);
-    el("circle", { cx: 500, cy: 110, r: 145, fill: "#fff", opacity: .46 }, svg);
-    const sol = el("g", { class: "sol" }, svg);
-    el("circle", { cx: 535, cy: 82, r: 54, fill: "#fff", opacity: .72 }, sol);
-    el("circle", { cx: 535, cy: 82, r: 34, fill: "#fff", opacity: .9 }, sol);
     function actualizar(nivel) {
-      const n = Math.max(0, Math.min(4, nivel));
-      svg.querySelector(".tono-inicial").setAttribute("stop-color", NIVEL_ESCENA.fondo[n]);
-      svg.querySelector(".tono-final").setAttribute("stop-color", n < 2 ? "#f8fcf8" : "#fffafa");
-      sol.setAttribute("opacity", NIVEL_ESCENA.sol[n]);
+      const n = Number.isInteger(nivel) ? Math.max(0, Math.min(4, nivel)) : null;
+      svg.querySelector(".tono-inicial").setAttribute("stop-color", n === null ? "#edf1f3" : NIVEL_ESCENA.fondo[n]);
+      svg.querySelector(".tono-final").setAttribute("stop-color", n === null ? "#f4f7fc" : n < 2 ? "#f4f8ff" : "#fffafa");
     }
-    actualizar(0);
+    actualizar(null);
     return { actualizar };
   }
 

@@ -80,6 +80,12 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertContains(r, 'id="catalogo-variables"')
         self.assertContains(r, 'id="lista-variables"')
         self.assertContains(r, "csrf-token")
+        self.assertContains(r, "PM₂.₅ mañana")
+        self.assertContains(r, "Recomendaciones para tu día")
+        self.assertContains(r, "¿Por qué cambia el aire mañana?")
+        self.assertContains(r, 'aria-label="Escala de calidad; se resaltará al calcular el pronóstico"')
+        self.assertContains(r, 'class="rec-card rec-card--pendiente"', count=3)
+        self.assertNotContains(r, 'id="bienvenida"')
         self.assertContains(r, "Factores que ayudan a limpiar el aire")
         self.assertContains(r, "Factores que aumentan la contaminación")
         self.assertNotContains(r, "Modo técnico")
@@ -131,6 +137,8 @@ class PrediccionTests(BaseConModelos):
             self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel"})
             self.assertEqual(set(d["explicacion"][clave]), {"simple"})
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
+        ids_recomendaciones = {r["id"] for r in d["recomendaciones"]}
+        self.assertTrue({"running", "sensibles", "ventilacion"}.issubset(ids_recomendaciones))
         self.assertIn(d["alerta"]["nivel"], [n["id"] for n in cat.NIVELES])
 
     def test_explicacion_para_publico_general(self):

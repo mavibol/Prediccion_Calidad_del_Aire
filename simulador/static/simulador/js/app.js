@@ -46,7 +46,6 @@
   const PORID = Object.fromEntries(CATALOGO.map((v) => [v.id, v]));
   const CSRF = $('meta[name="csrf-token"]').content;
   const COLOR_NIVEL = ["#0ca30c", "#f2b005", "#ec835a", "#d03b3b", "#7d3c98"];
-  const CARAS = [["checkCircle", "Limpio"], ["dotCircle", "Aceptable"], ["triangleAlert", "Regular"], ["shieldAlert", "Contaminado"], ["triangleAlert", "Peligroso"]];
 
   const estado = {
     filas: new Map(),      // id de variable a <li>
@@ -55,6 +54,110 @@
     temporizador: null,
     escena: null,
   };
+  const NIVELES = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"];
+  const TITULOS_NIVEL = ["Aire limpio", "Aire aceptable", "Aire regular", "Aire contaminado", "Aire peligroso"];
+  const ILUSTRACIONES = {
+    cielo: `<svg viewBox="0 0 160 110" focusable="false"><g fill="none" stroke="#f4b83f" stroke-width="4" stroke-linecap="round"><path d="M112 7v8M88 17l5 7m38-7-5 7M79 35h8m50 0h8"/></g><circle cx="112" cy="36" r="20" fill="#ffc94f" stroke="#f4b83f" stroke-width="3"/><path d="M31 83c-14 0-23-8-23-20 0-11 9-20 21-20 5-15 19-24 34-21 11 2 20 9 23 19 16-3 30 9 30 24 0 11-9 18-22 18Z" fill="#fff" stroke="#4987bf" stroke-width="4" stroke-linejoin="round"/></svg>`,
+    deporte: `<div class="w-16 h-16 mx-auto my-2 flex items-center justify-center">
+    <svg viewBox="0 0 100 100" class="w-10 h-10" fill="none" stroke="#359ea5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Cabeza -->
+      <circle cx="58" cy="22" r="7" />
+      <!-- Viento / Brisa detrás -->
+      <path d="M22 45H32M18 53H36M24 61H30" stroke="#82d0c8" stroke-width="4" />
+      <!-- Brazo trasero flexionado -->
+      <path d="M48 38L38 42L36 52" />
+      <!-- Torso inclinado hacia adelante -->
+      <path d="M54 30L46 54" stroke-width="7" />
+      <!-- Brazo delantero flexionado hacia arriba -->
+      <path d="M52 35L64 42L72 37" />
+      <!-- Pierna trasera en extensión completa -->
+      <path d="M46 54L34 66L23 62" />
+      <!-- Pierna delantera en zancada -->
+      <path d="M46 54L59 66L53 82" />
+    </svg>
+  </div>`,
+    sensibles: `<div class="w-16 h-16 mx-auto my-2 flex items-center justify-center">
+    <svg viewBox="0 0 100 100" class="w-10 h-10" fill="none" stroke="#8c62c2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Corazón en tono coral suave -->
+      <path d="M50 78C50 78 20 60 20 38C20 26 29 18 40 18C46 18 50 22 50 22C50 22 54 18 60 18C71 18 80 26 80 38C80 60 50 78 50 78Z" />
+      <!-- Hoja / Brote de aire puro en el centro -->
+      <path d="M50 56V40M50 46C44 44 42 38 44 34C48 34 50 38 50 46ZM50 42C56 40 58 34 56 30C52 30 50 34 50 42Z" stroke-width="4" />
+    </svg>
+  </div>`,
+
+  hogar: `<div class="w-16 h-16 mx-auto my-2 flex items-center justify-center">
+    <svg viewBox="0 0 100 100" class="w-10 h-10" fill="none" stroke="#4c8db8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Marco de la ventana -->
+      <rect x="25" y="20" width="50" height="60" rx="4" />
+      <!-- Divisiones de la ventana (cruz) -->
+      <line x1="50" y1="20" x2="50" y2="80" />
+      <line x1="25" y1="50" x2="75" y2="50" />
+      <!-- Brisas de viento exterior -->
+      <path d="M15 35c5-2 10 0 10 0M12 45c5-2 8 0 8 0" stroke="#82b8dc" stroke-width="4" />
+    </svg>
+  </div>`,
+ };
+  const ACCIONES = [
+    { id: "running", titulo: "Deporte", ilustracion: "deporte", estados: { si: "Muy recomendado", precaucion: "Con moderación", no: "Mejor evitar" }, textos: { si: "Ideal para entrenar al aire libre", precaucion: "Modera la intensidad", no: "Entrena en interiores" } },
+    { id: "sensibles", titulo: "Grupos sensibles", ilustracion: "sensibles", estados: { si: "Sin riesgo", precaucion: "Precaución", no: "Protegerse" }, textos: { si: "Pueden salir con tranquilidad", precaucion: "Toma precauciones", no: "Evita exposición prolongada" } },
+    { id: "ventilacion", titulo: "Hogar", ilustracion: "hogar", estados: { si: "Ventilar", precaucion: "Con cuidado", no: "No ventilar" }, textos: { si: "Buen momento para renovar el aire", precaucion: "Ventila por poco tiempo", no: "Mantén las ventanas cerradas" } },
+  ];
+  function pintarIlustraciones() {
+    $$("[data-ilustracion]").forEach((contenedor) => {
+      const svg = ILUSTRACIONES[contenedor.dataset.ilustracion];
+      if (!svg) throw new Error(`Ilustración desconocida: ${contenedor.dataset.ilustracion}`);
+      contenedor.innerHTML = svg;
+    });
+  }
+
+  function pintarEscala(orden) {
+    const etiquetas = NIVELES.map((texto, i) =>
+      `<span class="escala__etiqueta ${i === orden ? "activo" : ""}">${texto}</span>`).join("");
+    const tramos = COLOR_NIVEL.map((color, i) =>
+      `<span class="escala__tramo ${i === orden ? "activo" : ""}" style="--nivel-color:${color}"></span>`).join("");
+    const indicador = orden === null ? "" :
+      `<span class="escala__indicador" style="--nivel-color:${COLOR_NIVEL[orden]};--posicion:${(orden + 0.5) * 20}%" aria-hidden="true"></span>`;
+    const etiqueta = orden === null
+      ? "Escala de calidad; se resaltará al calcular el pronóstico"
+      : `Nivel pronosticado: ${NIVELES[orden]}`;
+    $("#escala").innerHTML = `<div class="escala__pista" role="img" aria-label="${etiqueta}">${tramos}${indicador}</div>
+      <div class="escala__etiquetas" aria-hidden="true">${etiquetas}</div>`;
+  }
+
+  function pintarRecomendaciones(lista) {
+    const recomendaciones = new Map((lista || []).map((r) => [r.id, r]));
+    const faltante = ACCIONES.find((accion) => !recomendaciones.has(accion.id));
+    if (lista && faltante) {
+      mostrarAviso(`No recibimos la recomendación de ${faltante.titulo.toLowerCase()}.`);
+      return;
+    }
+    $("#recomendaciones").innerHTML = ACCIONES.map((accion) => {
+      const r = recomendaciones.get(accion.id);
+      const titulo = r ? esc(r.etiqueta) : accion.titulo;
+      if (!r) {
+        return `<article class="rec-card rec-card--pendiente">
+          <div class="rec-card__visual rec-card__visual--${accion.ilustracion}"><span>${ILUSTRACIONES[accion.ilustracion]}</span></div>
+          <div class="rec-card__contenido"><h4>${titulo}</h4>
+            <strong class="rec-card__estado">Pendiente</strong>
+            <p>Agrega datos para ver la recomendación.</p></div>
+        </article>`;
+      }
+      const estadoRecomendacion = accion.estados[r.estado];
+      if (!estadoRecomendacion) {
+        mostrarAviso(`No reconocemos el estado de la recomendación de ${accion.titulo.toLowerCase()}.`);
+        return `<article class="rec-card rec-card--pendiente">
+          <div class="rec-card__visual rec-card__visual--${accion.ilustracion}"><span>${ILUSTRACIONES[accion.ilustracion]}</span></div>
+          <div class="rec-card__contenido"><h4>${titulo}</h4><strong class="rec-card__estado">Sin recomendación</strong></div>
+        </article>`;
+      }
+      return `<article class="rec-card rec-card--${esc(r.estado)}">
+        <div class="rec-card__visual rec-card__visual--${accion.ilustracion}"><span>${ILUSTRACIONES[accion.ilustracion]}</span></div>
+        <div class="rec-card__contenido"><h4>${titulo}</h4>
+          <strong class="rec-card__estado">${estadoRecomendacion}</strong>
+          <p class="rec-card__accion">${accion.textos[r.estado]}</p></div>
+      </article>`;
+    }).join("");
+  }
 
   /* -----------------------------------------------------------------
      PASO 2 · Navegación y menú
@@ -125,6 +228,8 @@
     if (!v || estado.filas.has(id)) return;
     const d = decimales(v);
     const inicial = valor ?? v.mediana;
+    const maximoSlider = Math.max(v.max, inicial, 1);
+    const pasoSlider = 1 / (10 ** d);
     const li = document.createElement("li");
     li.className = "dato";
     li.dataset.variable = id;
@@ -137,34 +242,38 @@
       </div>
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
-        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
-               aria-describedby="dato-error-${id}" value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
+        <div class="dato__medicion">
+          <div class="dato__deslizador">
+            <input type="range" class="dato__num" min="${v.min_valido}" max="${maximoSlider}" step="${pasoSlider}"
+                   aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
+                   aria-describedby="dato-error-${id}" value="${inicial}">
+            <div class="dato__extremos" aria-hidden="true"><span>${fmt(v.min_valido, d)}</span><span>${fmt(maximoSlider, d)}</span></div>
+          </div>
+          <output class="dato__lectura" for="dato-${id}">${fmt(inicial, d)} <small>${esc(v.unidad)}</small></output>
+        </div>
         <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
       <div class="dato__estado"><i></i><span></span></div>`;
 
     const num = $(".dato__num", li);
+    num.id = `dato-${id}`;
+    const lectura = $(".dato__lectura", li);
+    const actualizarDeslizador = () => {
+      const progreso = (Number(num.value) - Number(num.min)) / (Number(num.max) - Number(num.min)) * 100;
+      num.style.setProperty("--progreso", `${progreso}%`);
+      lectura.innerHTML = `${fmt(Number(num.value), d)} <small>${esc(v.unidad)}</small>`;
+    };
     const pintarEstado = (x) => {
       const [txt, color] = estadoDe(v, x);
       $(".dato__estado span", li).textContent = txt;
       $(".dato__estado i", li).style.background = color;
     };
+    actualizarDeslizador();
     pintarEstado(inicial);
 
     num.addEventListener("input", () => {
-      const x = aNumero(num.value);
-      const error = x === null || !Number.isFinite(x)
-        ? "Escribe un número válido."
-        : x < v.min_valido || x > v.max_valido
-          ? `El valor debe estar entre ${fmt(v.min_valido, d)} y ${fmt(v.max_valido, d)} ${v.unidad}.`
-          : "";
-      const malo = Boolean(error);
-      num.toggleAttribute("aria-invalid", malo);
-      num.style.borderColor = malo ? "var(--n3)" : "";
-      const errorEl = $(`#dato-error-${id}`, li);
-      errorEl.textContent = error;
-      errorEl.hidden = !malo;
-      if (malo) return;
+      const x = Number(num.value);
+      actualizarDeslizador();
       pintarEstado(x);
       programarCalculo(500);
     });
@@ -194,10 +303,27 @@
   function reiniciarResultados() {
     if (estado.peticion) estado.peticion.abort();
     estado.resultado = null;
-    $("#resultado").hidden = true;
-    $("#bienvenida").hidden = false;
+    const veredicto = $("#veredicto");
+    delete veredicto.dataset.clave;
+    veredicto.innerHTML = `<span class="veredicto__ilustracion">${ILUSTRACIONES.cielo}</span>
+      <span class="veredicto__estado">
+        <span class="veredicto__titulo">Tu pronóstico aparecerá aquí</span>
+      </span>
+      <div class="veredicto__resumen">
+        <span class="veredicto__medicion">
+          <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
+          <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+        </span>
+        <span class="veredicto__frase">Agrega datos para conocer el pronóstico.</span>
+      </div>`;
+    if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
+    estado.escena.actualizar(null);
+    pintarEscala(null);
+    pintarRecomendaciones(null);
+    $("#alerta-local").hidden = true;
     $("#mini-estado").classList.remove("visible");
     mostrarAviso("");
+    if (!$("#vista-explicabilidad").hidden) pintarPorque();
   }
 
   $("#btn-agregar").addEventListener("click", () => selector.value && agregarVariable(selector.value));
@@ -221,7 +347,7 @@
     const variables = [];
     for (const [id, li] of estado.filas) {
       const meta = PORID[id];
-      const x = aNumero($(".dato__num", li).value);
+      const x = Number($(".dato__num", li).value);
       if (x === null || !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
       variables.push({ variable: id, valor: x });
     }
@@ -266,103 +392,51 @@
      ----------------------------------------------------------------- */
   function pintarResultado(d) {
     const a = d.alerta;
-    $("#bienvenida").hidden = true;
-    $("#resultado").hidden = false;
 
     // 5.1 El fondo y la lectura principal cambian según el nivel pronosticado
     if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
     estado.escena.actualizar(a.orden);
     const ver = $("#veredicto");
-    const clave = a.titulo + a.cara;
-    const pronostico = d.predicciones[a.contaminante];
-    const etiquetaPronostico = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
-    const detalleNivel = [
-      "Nivel estimado dentro de los límites saludables",
-      "Nivel aceptable para la mayoría de las personas",
-      "Puede afectar a personas sensibles",
-      "Puede afectar la salud de toda la población",
-      "Nivel muy perjudicial para la salud",
+    const titulo = TITULOS_NIVEL[a.orden] || a.titulo;
+    const clave = a.orden + a.cara;
+    const pronostico = d.predicciones.pm2_5;
+    const mensajeNivel = [
+      "¡Excelente para actividades al aire libre!",
+      "Buenas condiciones para salir.",
+      "Modera el esfuerzo al aire libre.",
+      "Evita el ejercicio al aire libre.",
+      "Permanece en interiores.",
     ][a.orden];
     if (ver.dataset.clave !== clave) { // solo «rebota» la cara si cambió el nivel
       ver.dataset.clave = clave;
-      ver.innerHTML = `<span class="veredicto__estado">
-          <span class="veredicto__cara" style="color:${COLOR_NIVEL[a.orden]}" aria-hidden="true">${icono(a.cara, "icon")}</span>
-          <span class="veredicto__titulo">${esc(a.titulo)}</span>
+      ver.innerHTML = `<span class="veredicto__ilustracion">${ILUSTRACIONES.cielo}</span>
+        <span class="veredicto__estado">
+          <span class="veredicto__titulo">${esc(titulo)}</span>
         </span>
-        <span class="veredicto__medicion">
-          <span class="veredicto__etiqueta">${etiquetaPronostico} estimado para mañana</span>
-          <strong class="veredicto__valor"><span class="veredicto__numero">${fmt(pronostico.valor, 1)}</span> <span>µg/m³</span></strong>
-        </span>
-        <span class="veredicto__frase">${detalleNivel}. ${esc(a.frase)}</span>`;
+        <div class="veredicto__resumen">
+          <span class="veredicto__medicion">
+            <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
+            <strong class="veredicto__valor"><span class="veredicto__numero">${fmt(pronostico.valor, 1)}</span> <span>µg/m³</span></strong>
+          </span>
+          <span class="veredicto__frase"></span>
+        </div>`;
     }
-    ver.querySelector(".veredicto__etiqueta").textContent = `${etiquetaPronostico} estimado para mañana`;
+    ver.querySelector(".veredicto__titulo").textContent = titulo;
     ver.querySelector(".veredicto__numero").textContent = fmt(pronostico.valor, 1);
+    const frase = ver.querySelector(".veredicto__frase");
+    frase.textContent = `${mensajeNivel}${a.contaminante === "pm10" ? " La categoría también considera PM₁₀." : ""}`;
+    frase.setAttribute("aria-label", `${frase.textContent} ${a.frase}`);
 
     // 5.2 Barra de cinco estados con el nivel pronosticado destacado
-    const nivelActual = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"][a.orden];
-    $("#escala").innerHTML = `
-      <div class="escala__pista" role="img" aria-label="Nivel pronosticado: ${nivelActual}">
-        ${CARAS.map((_, i) => `<span class="escala__tramo ${i === a.orden ? "activo" : ""}" style="--nivel-color:${COLOR_NIVEL[i]}"></span>`).join("")}
-        <span class="escala__indicador" style="--nivel-color:${COLOR_NIVEL[a.orden]};--posicion:${(a.orden + 0.5) * 20}%" aria-hidden="true"></span>
-      </div>
-      <div class="escala__etiquetas" aria-hidden="true">
-        ${["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"].map((txt, i) => `<span class="escala__etiqueta ${i === a.orden ? "activo" : ""}">${txt}</span>`).join("")}
-      </div>`;
+    pintarEscala(a.orden);
 
     $("#alerta-local").hidden = !a.dia_critico_local;
     $("#alerta-local").innerHTML = `${icono("triangleAlert", "icon")} Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.`;
 
-    // 5.3 Completitud observada + sugerencia del dato más útil que falta
-    const faltante = CATALOGO.find((v) => !estado.filas.has(v.id));
-    const completas = d.entrada.completitud;
-    $("#precision").innerHTML = `<h3>Datos ingresados</h3>
-      <div class="completitud__valor">${completas.ingresadas} de ${completas.total} datos ingresados <b>(${fmt(completas.porcentaje, 0)} %)</b></div>
-      <div class="completitud__barra" role="meter" aria-label="Completitud de datos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completas.porcentaje}">
-        <span style="width:${completas.porcentaje}%"></span></div>
-      ${faltante && completas.ingresadas < completas.total ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.etiqueta)} — ${esc(faltante.nombre_largo)}</button>` : ""}`;
-    const sug = $(".sugerencia", $("#precision"));
-    if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
+    // Consejos para hoy
+    pintarRecomendaciones(d.recomendaciones);
 
-    // 5.4 Resumen breve de las atribuciones TreeSHAP
-    const s = d.explicacion[a.contaminante].simple;
-    const fila = (f, favorable) => f ? `<div class="porque-mini__fila ${favorable ? "porque-mini__fila--favorable" : "porque-mini__fila--desfavorable"}">
-        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${favorable ? "🟢 Ayuda a mantener el aire limpio" : "🔴 Puede empeorar la calidad del aire"}</small></span></div>` : "";
-    $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.desfavorables[0], false)}${fila(s.favorables[0], true)}
-      ${!s.desfavorables.length && !s.favorables.length ? `<p class="suave">No hay aportes individuales relevantes.</p>` : ""}
-      <span class="ver-mas">Ver la explicación ${icono("arrowRight", "icon")}</span>`;
-
-    // 5.5 Consejos para hoy (máximo seis palabras cada uno)
-    const ESTADO_RECOMENDACION = { si: "Recomendado", precaucion: "Con cuidado", no: "Mejor evitar" };
-    $("#recomendaciones").innerHTML = d.recomendaciones.map((r) => `
-      <button type="button" class="rec rec--${r.estado}"
-              aria-label="${esc(r.etiqueta)}. ${ESTADO_RECOMENDACION[r.estado]}. Pulsa para ver el motivo."
-              data-etiqueta="${esc(r.etiqueta)}" data-estado="${ESTADO_RECOMENDACION[r.estado]}"
-              data-motivo="${esc(r.texto)}"
-              aria-expanded="false">
-        <span class="rec__giro">
-          <span class="rec__cara">
-            <span class="rec__ico" aria-hidden="true">${icono(r.icono, "icon")}</span>
-            <span class="rec__tit">${esc(r.etiqueta)}</span>
-            <span class="rec__txt"><span class="rec__estado">${ESTADO_RECOMENDACION[r.estado]}</span></span>
-          </span>
-          <span class="rec__dorso">
-            <span class="rec__motivo-titulo">¿Por qué?</span>
-            <span class="rec__motivo">${esc(r.texto)}</span>
-            <span class="rec__volver">Toca para volver</span>
-          </span>
-        </span>
-      </button>`).join("");
-    $$(".rec", $("#recomendaciones")).forEach((tarjeta) => {
-      tarjeta.addEventListener("click", () => {
-        const girada = tarjeta.classList.toggle("girada");
-        tarjeta.setAttribute("aria-expanded", String(girada));
-        tarjeta.setAttribute("aria-label", girada
-          ? `Motivo de ${tarjeta.dataset.etiqueta}: ${tarjeta.dataset.motivo}. Pulsa para volver a la recomendación.`
-          : `${tarjeta.dataset.etiqueta}. ${tarjeta.dataset.estado}. Pulsa para ver el motivo.`);
-      });
-    });
-
-    // 5.6 Estado compacto para móvil
+    // Estado compacto para móvil
     const mini = $("#mini-estado");
     mini.style.background = COLOR_NIVEL[a.orden];
     mini.style.color = a.tinta;
@@ -374,21 +448,22 @@
   /* -----------------------------------------------------------------
      PASO 6 · ¿Por qué? — factores explicados en lenguaje cotidiano
      ----------------------------------------------------------------- */
-  function tarjetaFactor(f, maxAporte, favorable) {
+  function tarjetaFactor(f, maxAporte, favorable, esPrincipal) {
     const ancho = Math.max(2, Math.abs(f.aporte) / maxAporte * 100);
     const unidad = f.unidad === "adim." || f.unidad === "índice" ? "" : ` ${esc(f.unidad)}`;
     const decimalesValor = f.valor < 5 ? 2 : 1;
-    const direccion = favorable ? "ayuda a limpiar el aire" : "aumenta la contaminación";
+    const direccion = favorable ? "baja el pronóstico" : "sube la contaminación";
     return `<article class="factor ${favorable ? "factor--favorable" : "factor--desfavorable"} ${f.origen === "estimada" ? "factor--estimada" : ""}"
-              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${direccion}.">
+              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${direccion}${esPrincipal ? ", el factor que más pesa" : ""}.">
       <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
       <span class="factor__nombre">${esc(f.nombre_comun)}</span>
-      <span class="factor__variable">${esc(f.etiqueta)}</span>
-      <span class="factor__valor-etiqueta">${f.origen === "estimada" ? "Valor estimado" : "Valor medido"}</span>
+      <span class="factor__direccion">${direccion}</span>
+      <span class="factor__variable">${esc(f.etiqueta)} · ${f.origen === "estimada" ? "Valor estimado" : "Valor medido"}</span>
       <strong class="factor__valor">${fmt(f.valor, decimalesValor)}${unidad}</strong>
       <span class="aporte__pista" role="img" aria-label="Nivel de influencia: ${direccion}">
         <span style="width:${ancho}%"></span>
       </span>
+      ${esPrincipal ? `<span class="factor__principal">Es el factor que más pesa</span>` : "" }
       ${f.origen === "estimada" ? `<span class="factor__estimada">Estimado automáticamente</span>` : "" }
     </article>`;
   }
@@ -399,15 +474,16 @@
     $("#xai-contenido").hidden = !d;
     if (!d) return;
     const a = d.alerta, s = d.explicacion[a.contaminante].simple;
-    const relevantes = [...s.favorables, ...s.desfavorables];
+    const relevantes = [
+      ...s.favorables.map((f) => ({ ...f, ayuda: true })),
+      ...s.desfavorables.map((f) => ({ ...f, ayuda: false })),
+    ].sort((x, y) => Math.abs(y.aporte) - Math.abs(x.aporte));
     const maxAporte = Math.max(...relevantes.map((f) => Math.abs(f.aporte)), 0.01);
     const objetivo = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
     const saludables = a.orden === 0;
-    const factoresClave = (a.orden < 2 ? s.favorables : s.desfavorables)
-      .slice(0, 2)
-      .map((f) => f.nombre_comun);
-    const influencia = factoresClave.length
-      ? `${a.orden < 2 ? "Ayudan especialmente" : "Influyen especialmente"} ${factoresClave.join(" y ")}.`
+    const factorPrincipal = relevantes[0];
+    const influencia = factorPrincipal
+      ? `Lo que más pesa es ${factorPrincipal.nombre_comun}, junto con los demás datos del aire.`
       : "El resultado combina los datos ingresados y los estimados automáticamente.";
     const estadoHumano = saludables
       ? "se mantiene en niveles saludables"
@@ -417,13 +493,13 @@
           ? "requiere precaución para las personas sensibles"
           : "puede afectar la salud; conviene limitar las actividades al aire libre";
     $("#xai-frase").textContent = `El pronóstico de ${objetivo} (${fmt(s.prediccion, 1)} µg/m³) ${estadoHumano}. ${influencia}`;
-    $("#col-favorables").innerHTML = s.favorables.length ? s.favorables.map((f) => tarjetaFactor(f, maxAporte, true)).join("")
-      : `<div class="columna__vacia">Sin aportes favorables relevantes</div>`;
-    $("#col-desfavorables").innerHTML = s.desfavorables.length ? s.desfavorables.map((f) => tarjetaFactor(f, maxAporte, false)).join("")
-      : `<div class="columna__vacia">Sin aportes desfavorables relevantes</div>`;
-    $("#xai-nota").textContent = s.hay_estimadas
-      ? "Los datos con la etiqueta «Estimado automáticamente» se completaron porque no fueron ingresados."
-      : "";
+    $("#col-factores").innerHTML = relevantes.length
+      ? relevantes.map((f, i) => tarjetaFactor(f, maxAporte, f.ayuda, i === 0)).join("")
+      : `<div class="columna__vacia">No hay factores relevantes para mostrar.</div>`;
+    $("#xai-nota").textContent = [
+      s.hay_estimadas ? "Los datos con la etiqueta «Estimado automáticamente» se completaron porque no fueron ingresados." : "",
+      "La explicación resume patrones aprendidos por el modelo; no demuestra una causa directa.",
+    ].filter(Boolean).join(" ");
 
   }
 
@@ -431,6 +507,8 @@
      PASO 7 · Arranque
      ----------------------------------------------------------------- */
   if (!CONFIG.listo) mostrarAviso("La interfaz está disponible, pero las predicciones no. " + (CONFIG.error_carga || ""));
+  estado.escena = window.Graficos.escena($("#escena"));
+  pintarIlustraciones();
   poblarSelector();
   mostrarVista();
 })();

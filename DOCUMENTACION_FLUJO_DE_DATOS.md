@@ -146,8 +146,9 @@ El **semáforo** (`_alerta()`) ubica cada predicción en los cortes del ICA de l
 
 La API entrega una explicación resumida (`simple`, generada por `explicacion_simple()` en `narrativa.py`); la interfaz la presenta junto con el estado, el pronóstico y las recomendaciones:
 
-- **Banner de estado** (`Graficos.escena`): un fondo degradado y sutil cambia de tono según el nivel, sin siluetas de edificios. El estado se acompaña con iconos SVG y texto, nunca solo con color.
-- **¿Por qué?**: presenta factores favorables y desfavorables en lenguaje cotidiano, con sus valores medidos o estimados y una barra de influencia relativa. La interpretación es relativa al modelo y no implica causalidad.
+- **Visualizador de Mi aire** (`Graficos.escena`): un fondo degradado y sutil cambia de tono según el nivel, sin siluetas de edificios. El estado se acompaña con iconos SVG y texto, nunca solo con color; también presenta el pronóstico de PM₂.₅ y una escala horizontal de calidad.
+- **Recomendaciones para tu día**: muestra tres tarjetas legibles de deporte, grupos sensibles y hogar a partir de las recomendaciones del nivel pronosticado.
+- **Factores del Aire**: presenta primero un resumen narrativo de los factores con mayor influencia SHAP y debajo los factores favorables y desfavorables, con sus valores medidos o estimados y una barra de influencia relativa. La interpretación es relativa al modelo y no implica causalidad.
 - **Estado de cada dato** («por encima de lo saludable», «más alto de lo normal», «normal», «más bajo de lo normal») con la guía OMS y los percentiles 10 y 90 de la ciudad. Si el estado contradice el efecto (p. ej., un valor bajo que el modelo asocia con más contaminación), se omite el estado para no confundir.
 - **Completitud**: muestra la cantidad y el porcentaje de variables ingresadas sobre las nueve disponibles.
 - **Estimaciones**: identifica los valores que el sistema completó automáticamente porque no fueron ingresados.
