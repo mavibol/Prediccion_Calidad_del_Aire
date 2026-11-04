@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Aire Claro · ¿Cómo estará el aire?</title>
-  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=11">
+  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=13">
 </head>
 <body>
 <div class="app" id="app">
@@ -148,7 +148,12 @@
         <section class="tarjeta xai-panel">
           <header class="xai-cabecera">
             <div class="xai-cabecera__texto">
-              <h2 class="xai-cabecera__titulo">¿Por qué cambia el aire mañana?</h2>
+              <div class="xai-cabecera__titulo-fila">
+                <h2 class="xai-cabecera__titulo">¿Por qué cambia el aire mañana?</h2>
+                <button class="xai-como-funciona" id="xai-abrir-ayuda" type="button" aria-haspopup="dialog" aria-controls="xai-dialogo">
+                  ¿Cómo funciona? <span aria-hidden="true">ℹ</span>
+                </button>
+              </div>
               <p class="frase-grande" id="xai-frase"></p>
             </div>
             <div class="xai-leyenda" aria-label="Significado de los colores">
@@ -160,6 +165,21 @@
           <p class="suave centro xai-nota" id="xai-nota"></p>
         </section>
       </div>
+      <dialog class="xai-dialogo" id="xai-dialogo" aria-labelledby="xai-dialogo-titulo">
+        <section class="xai-dialogo__contenido">
+          <header class="xai-dialogo__cabecera">
+            <h2 id="xai-dialogo-titulo">¿Cómo funciona esta predicción?</h2>
+            <button class="xai-dialogo__cerrar" id="xai-cerrar-ayuda" type="button" aria-label="Cerrar explicación">×</button>
+          </header>
+          <div class="xai-dialogo__texto">
+            <p><strong>De dónde vienen los datos.</strong> El modelo toma las mediciones registradas para hoy en las estaciones de monitoreo de la ciudad. En esta herramienta los valores se ingresan para la simulación y los datos faltantes pueden estimarse; no son lecturas en vivo.</p>
+            <p><strong>Qué pronostica.</strong> Compara estas concentraciones con patrones históricos para anticipar el nivel de PM₂.₅ de mañana.</p>
+            <p><strong>Por qué algunos factores ayudan y otros suman contaminación.</strong> Las barras azules indican condiciones que favorecen un aire más limpio. Las barras rojas indican emisiones presentes que, aunque estén en niveles seguros o bajos, suman partículas al ambiente en comparación con un aire totalmente puro.</p>
+            <p><strong>Qué significa la barra.</strong> Su longitud muestra cuánto peso tuvo cada factor en la decisión del modelo frente a los demás factores mostrados.</p>
+          </div>
+          <button class="btn btn--primario xai-dialogo__listo" id="xai-listo-ayuda" type="button">Entendido</button>
+        </section>
+      </dialog>
     </section>
   </main>
 </div>
@@ -168,6 +188,6 @@
 {{ config_front|json_script:"config-front" }}
 <script src="{% static 'simulador/js/icons.js' %}"></script>
 <script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
-<script src="{% static 'simulador/js/app.js' %}?v=12"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=14"></script>
 </body>
 </html>

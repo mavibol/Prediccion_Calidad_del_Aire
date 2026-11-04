@@ -448,25 +448,96 @@
   /* -----------------------------------------------------------------
      PASO 6 · ¿Por qué? — factores explicados en lenguaje cotidiano
      ----------------------------------------------------------------- */
+  const EXPLICACIONES_FACTORES = {
+    pm2_5: "Partículas microscópicas producidas por quema de combustibles, incendios y motores diésel. Por ser tan finas, ingresan directo a los pulmones.",
+    sulphur_dioxide: "Dióxido de azufre generado por la combustión en industrias y transporte de carga pesada.",
+    ozone: "Gas que se produce a nivel del suelo cuando la radiación solar y las altas temperaturas reaccionan con los gases de los vehículos.",
+    pm10: "Partículas de polvo del suelo, cenizas y material suspendido levantado por el viento y obras viales.",
+    carbon_monoxide: "Monóxido de carbono emitido por vehículos, especialmente en situaciones de congestión o tráfico lento.",
+  };
+
+  function estadoSalud(variable, valor) {
+    const umbral = PORID[variable]?.umbral_seguro;
+    if (!Number.isFinite(Number(valor)) || !Number.isFinite(Number(umbral)) || Number(umbral) <= 0) {
+      return { etiqueta: "Dato ambiental", clase: "factor__salud--neutral" };
+    }
+
+    const proporcion = Number(valor) / Number(umbral);
+    if (proporcion <= 0.25) return { etiqueta: "Muy bajo", clase: "factor__salud--muy-bajo" };
+    if (proporcion <= 1) return { etiqueta: "Bueno / Saludable", clase: "factor__salud--bueno" };
+    if (proporcion <= 1.5) return { etiqueta: "Aceptable", clase: "factor__salud--aceptable" };
+    return { etiqueta: "Conviene tener cuidado", clase: "factor__salud--cuidado" };
+  }
+
   function tarjetaFactor(f, maxAporte, favorable, esPrincipal) {
-    const ancho = Math.max(2, Math.abs(f.aporte) / maxAporte * 100);
+    const peso = Math.min(100, Math.max(15, Math.abs(f.aporte) / maxAporte * 100));
     const unidad = f.unidad === "adim." || f.unidad === "índice" ? "" : ` ${esc(f.unidad)}`;
     const decimalesValor = f.valor < 5 ? 2 : 1;
-    const direccion = favorable ? "baja el pronóstico" : "sube la contaminación";
+    const salud = estadoSalud(f.variable, f.valor);
+    const accion = favorable ? "limpieza" : "concentración";
+    const impacto = esPrincipal
+      ? `Aporte principal a la ${accion}`
+      : `${peso >= 40 ? "Aporte moderado" : "Aporte leve"} a la ${accion}`;
+    const explicacion = EXPLICACIONES_FACTORES[f.variable] || f.que_es;
+    const idAyuda = `factor-ayuda-${f.variable}`;
     return `<article class="factor ${favorable ? "factor--favorable" : "factor--desfavorable"} ${f.origen === "estimada" ? "factor--estimada" : ""}"
-              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${direccion}${esPrincipal ? ", el factor que más pesa" : ""}.">
+              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${salud.etiqueta}. ${impacto}.">
       <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
-      <span class="factor__nombre">${esc(f.nombre_comun)}</span>
-      <span class="factor__direccion">${direccion}</span>
-      <span class="factor__variable">${esc(f.etiqueta)} · ${f.origen === "estimada" ? "Valor estimado" : "Valor medido"}</span>
-      <strong class="factor__valor">${fmt(f.valor, decimalesValor)}${unidad}</strong>
-      <span class="aporte__pista" role="img" aria-label="Nivel de influencia: ${direccion}">
-        <span style="width:${ancho}%"></span>
-      </span>
-      ${esPrincipal ? `<span class="factor__principal">Es el factor que más pesa</span>` : "" }
-      ${f.origen === "estimada" ? `<span class="factor__estimada">Estimado automáticamente</span>` : "" }
+      <div class="factor__encabezado">
+        <h3 class="factor__nombre">${esc(f.nombre_comun)}</h3>
+        <span class="factor__variable">
+          ${esc(f.etiqueta)}
+          ${explicacion ? `<span class="factor__ayuda-wrap">
+            <button class="factor__ayuda" type="button" aria-label="Qué significa ${esc(f.etiqueta)}" aria-expanded="false" aria-describedby="${idAyuda}">ℹ</button>
+            <span class="factor__tooltip" id="${idAyuda}" role="tooltip">${esc(explicacion)}</span>
+          </span>` : ""}
+        </span>
+      </div>
+      <div class="factor__medicion">
+        <strong class="factor__valor">${fmt(f.valor, decimalesValor)}${unidad}</strong>
+        <span class="factor__salud ${salud.clase}">${salud.etiqueta}</span>
+      </div>
+      <div class="aporte__pista" role="progressbar" aria-label="Peso relativo del factor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(peso)}">
+        <span style="width:${peso}%"></span>
+      </div>
+      <p class="factor__impacto">${impacto}</p>
+      ${f.origen === "estimada" ? `<span class="factor__estimada">Dato estimado</span>` : "" }
     </article>`;
   }
+
+  const dialogoAyuda = $("#xai-dialogo");
+  const botonAbrirAyuda = $("#xai-abrir-ayuda");
+  function cerrarTooltips(excepto = null) {
+    $$(".factor__ayuda[aria-expanded='true']", $("#col-factores"))
+      .filter((boton) => boton !== excepto)
+      .forEach((boton) => boton.setAttribute("aria-expanded", "false"));
+  }
+  botonAbrirAyuda.addEventListener("click", () => dialogoAyuda.showModal());
+  $("#xai-cerrar-ayuda").addEventListener("click", () => dialogoAyuda.close());
+  $("#xai-listo-ayuda").addEventListener("click", () => dialogoAyuda.close());
+  dialogoAyuda.addEventListener("click", (evento) => {
+    if (evento.target === dialogoAyuda) dialogoAyuda.close();
+  });
+  dialogoAyuda.addEventListener("close", () => botonAbrirAyuda.focus());
+
+  $("#col-factores").addEventListener("click", (evento) => {
+    const boton = evento.target.closest(".factor__ayuda");
+    if (!boton) {
+      cerrarTooltips();
+      return;
+    }
+    const abrir = boton.getAttribute("aria-expanded") !== "true";
+    cerrarTooltips(boton);
+    boton.setAttribute("aria-expanded", String(abrir));
+  });
+  $("#col-factores").addEventListener("keydown", (evento) => {
+    if (evento.key !== "Escape") return;
+    const boton = evento.target.closest(".factor__ayuda");
+    if (boton && boton.getAttribute("aria-expanded") === "true") {
+      boton.setAttribute("aria-expanded", "false");
+      boton.focus();
+    }
+  });
 
   function pintarPorque() {
     const d = estado.resultado;
