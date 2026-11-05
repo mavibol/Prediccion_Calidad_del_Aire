@@ -1,71 +1,77 @@
-# Aire Claro v3 · Simulador de calidad del aire con IA explicable
+# Aire Claro · Simulador de calidad del aire con IA explicable
 
-Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, próximas 24 h) a partir de **magnitudes instantáneas**, sin fechas. El usuario arma su propio conjunto de variables, recibe un semáforo de 5 niveles con recomendaciones prácticas y una explicación SHAP en lenguaje cotidiano.
+Plataforma Django para simular y anticipar la calidad del aire en el Valle de Aburrá (PM2.5 y PM10, próximas 24 h). El usuario escribe lo que sabe del aire de hoy y la aplicación descarga sola el **pronóstico del clima de mañana**. Con ambos datos, el modelo seleccionado en la tesis (**escenario C: pronóstico a 24 h + meteorología, LightGBM**) estima el aire de mañana. El resultado se presenta con un semáforo de 5 niveles, recomendaciones prácticas y una explicación SHAP en lenguaje cotidiano.
 
 ## Módulos (pensados para público general)
 
 | Pantalla | Qué ve el usuario |
 |---|---|
-| **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un amplio rango de plausibilidad, independiente de los máximos observados en el dataset; el servidor rechaza valores fuera de esos límites. Todo se recalcula al instante: un fondo sutil cambia de tono según el nivel, un indicador vectorial marca el estado y aparecen 5 consejos. |
-| **¿Por qué?** (explicabilidad) | Atribuciones TreeSHAP agrupadas por dirección: aportes que disminuyen el valor predicho y aportes que lo incrementan. Muestra su magnitud en µg/m³, una barra comparativa, el valor base E[f(X)] y la predicción. Las tarjetas giran al tocarlas para explicar cada variable. |
-| **¿Es confiable?** (comparador) | En modo técnico muestra MAE/RMSE de validación y prueba, completitud, método de imputación y un rango predictivo empírico P95 calibrado con validación cronológica. También compara modelos y explica sus límites. |
+| **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un rango amplio de valores plausibles y el servidor rechaza los que estén fuera de esos límites. El visualizador presenta el estado, el pronóstico de PM₂.₅, una escala de calidad y la tarjeta **«Clima de mañana»** (lluvia, viento, temperatura y nubes usados por el modelo). Tres tarjetas resumen recomendaciones para deporte, grupos sensibles y el hogar. |
+| **Factores del Aire** (explicabilidad) | Una explicación narrativa de los factores con mayor influencia, seguida de los que ayudan a limpiar el aire y los que pueden aumentar la contaminación. Incluye los **factores de clima** (lluvia, viento, temperatura, humedad, nubes y sol, presión, altura de mezcla). La interpretación no implica causalidad. |
 
-El interruptor **Modo técnico** (pie del menú) muestra para evaluadores una cascada interactiva con aportes SHAP exactos por característica, la comprobación aditiva y los errores MAE/RMSE. El botón **Modelo listo** de la barra lateral abre la ficha del algoritmo y sus métricas de validación.
+El formulario ofrece las nueve variables de calidad del aire que alimentan el modelo: PM₁₀, PM₂.₅, SO₂, NO₂, O₃, CO, AOD, índice UV y polvo. Las variables meteorológicas no se escriben: se descargan del pronóstico de Open-Meteo.
 
-El rango predictivo se calibra con errores absolutos del conjunto de validación; es una referencia empírica, no un intervalo de confianza para parámetros ni una cobertura garantizada. Los errores pueden cambiar con el tiempo y las condiciones.
+## Modelo desplegado
 
-El formulario usa nomenclatura formal (por ejemplo, PM₁₀ y PM₂.₅) y las unidades del dataset. Solo ofrece las nueve variables que realmente alimentan al modelo; temperatura, humedad relativa, radiación solar y velocidad del viento no forman parte del dataset/modelo actual.
+- **Escenario C** del Capítulo 2: 51 variables.
+  - 21 variables del escenario A: rezagos y promedios de los contaminantes, aerosoles y calendario.
+  - 15 variables meteorológicas del día pronosticado.
+  - Las mismas 15 variables del día anterior.
+- **Algoritmo:** LightGBM para PM2.5 y para PM10, seleccionado por validación en el notebook `E2_Capitulo2`.
+- **Desempeño en prueba:** PM2.5 MAE 2,40 µg/m³ (R² 0,37); PM10 MAE 2,49 µg/m³ (R² 0,39). Es un 23 % mejor que la persistencia.
 
 ## Puesta en marcha
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Opción A — usar tus modelos de Colab (recomendado).** Copia `modelo_pm2_5_XGBoost.joblib`, `modelo_pm10_XGBoost.joblib` (y, si lo tienes, `metadatos_modelos.json`) a `ml_models/`. Luego genera el benchmark (no sobrescribe tus modelos):
+Se recomienda **Python 3.12 o 3.13**, porque `requirements.txt` fija las versiones de Colab.
+
+1. Copien a `ml_models/` los archivos exportados en la sección 11 del notebook `E2_Capitulo2`:
+   - `modelo_pm2_5.txt`
+   - `modelo_pm10.txt`
+   - `metadatos_modelos.json`
+2. Copien `meteorologia_diaria.csv` del mismo zip a `datos/`.
+3. Ejecuten:
 
 ```bash
-python scripts/construir_artefactos.py
-```
-
-También puedes exportar los modelos XGBoost ya entrenados en formato nativo `.json` desde Colab. Si están presentes, la aplicación prefiere esos archivos a los `.joblib` con el mismo nombre base; así se evitan incompatibilidades de serialización entre versiones:
-
-```python
-modelo.save_model("modelo_pm2_5_XGBoost.json")
-```
-
-Coloca ambos JSON (`modelo_pm2_5_XGBoost.json` y `modelo_pm10_XGBoost.json`) en `ml_models/`. No es necesario volver a entrenar los modelos.
-
-**Opción B — entrenar aquí.** Si `ml_models/` está vacío, el mismo comando entrena XGBoost con el protocolo y los hiperparámetros del notebook del Capítulo 2 (Tabla 10) y guarda los `.joblib`.
-
-Después:
-
-```bash
-python manage.py test simulador    # pruebas del simulador
+python manage.py test simulador    # 19 pruebas
 python manage.py runserver
 ```
 
-Abre http://127.0.0.1:8000/
+Abran http://127.0.0.1:8000/
+
+## Clima de mañana
+
+El modelo necesita el tiempo de **hoy** y de **mañana**. Al calcular un pronóstico, `simulador/ml/meteo.py` descarga el pronóstico horario de Open-Meteo (`forecast_days=2`) para las coordenadas de `metadatos_modelos.json`. Luego lo resume por día con las mismas reglas de la sección 12 del notebook del EDA:
+- la lluvia se suma en las 24 horas;
+- la temperatura, el viento, la humedad y las nubes se promedian.
+
+- **Consulta en caché:** la descarga se guarda una hora, así que la página no se vuelve lenta al mover los deslizadores.
+- **Sin internet:** la aplicación usa el **clima típico de cada mes**, calculado con `datos/meteorologia_diaria.csv`, y lo avisa en la tarjeta. Reintenta la descarga a los 10 minutos.
 
 ## Estructura
 
 ```
-aire_claro_v3/
+Calidad del aire/
 ├── manage.py
 ├── requirements.txt
 ├── config/                      settings.py · urls.py · wsgi.py · asgi.py
-├── datos/air_quality_historical.csv
-├── ml_models/                   modelos .joblib o .json + benchmark_modelos.json
-├── scripts/construir_artefactos.py
+├── datos/
+│   ├── air_quality_historical.csv   calidad del aire (Open-Meteo Air Quality API, CAMS)
+│   └── meteorologia_diaria.csv      meteorología diaria (Open-Meteo, reanálisis ERA5)
+├── ml_models/                   modelo_pm2_5.txt · modelo_pm10.txt · metadatos_modelos.json
 ├── simulador/
-│   ├── ml_service.py            pipeline: validar -> imputar -> 21 variables -> predecir -> SHAP
+│   ├── ml_service.py            validar -> imputar -> clima -> 51 variables -> predecir -> SHAP
 │   ├── ml/
-│   │   ├── catalogo.py          variables, umbrales OMS, cortes ICA, recomendaciones, resultados tesis
-│   │   ├── datos.py             limpieza + ingeniería de variables (compartido con el entrenamiento)
-│   │   ├── explicadores.py      shap -> contribuciones nativas -> TreeSHAP propio
-│   │   └── narrativa.py         SHAP -> frases en lenguaje claro
+│   │   ├── catalogo.py          variables, factores de clima, umbrales OMS, cortes ICA, recomendaciones
+│   │   ├── datos.py             limpieza + ingeniería de variables (igual que el notebook)
+│   │   ├── meteo.py             descarga y agregación diaria del pronóstico del clima
+│   │   ├── explicadores.py      shap -> contribuciones nativas de LightGBM -> TreeSHAP propio
+│   │   └── narrativa.py         SHAP -> factores para explicar en lenguaje claro
 │   ├── views.py · urls.py · tests.py
 │   ├── templates/simulador/index.html
 │   └── static/simulador/  css/styles.css · js/app.js · js/charts.js · js/icons.js
@@ -78,9 +84,7 @@ aire_claro_v3/
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/api/variables/` | Catálogo de variables válidas con estadísticas e importancia |
-| POST | `/api/predecir/` | Predicción + semáforo + recomendaciones + SHAP (requiere token CSRF) |
-| GET | `/api/benchmark/` | Benchmark calculado + resultados oficiales de la tesis |
-| GET | `/api/estado/` | Modelos cargados, explicador en uso, P90, MAE de prueba |
+| POST | `/api/predecir/` | Predicción + semáforo + recomendaciones + clima de mañana + explicación sencilla (requiere token CSRF) |
 
 Ejemplo de cuerpo para `/api/predecir/`:
 
@@ -91,6 +95,8 @@ Ejemplo de cuerpo para `/api/predecir/`:
 ]}
 ```
 
+La respuesta incluye el bloque `clima`, con `disponible`, `fecha`, `fuente` y `resumen` (lluvia, viento, temperatura y nubes de mañana).
+
 ## Configuración
 
 | Variable de entorno | Valor por defecto | Uso |
@@ -99,10 +105,12 @@ Ejemplo de cuerpo para `/api/predecir/`:
 | `DJANGO_DEBUG` | `1` | `0` en producción |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Dominios permitidos |
 | `AIRE_IMPUTACION` | `iterativa` | `mediana` para imputación simple |
+| `AIRE_METEO_EN_LINEA` | `1` | `0` para no consultar Open-Meteo y usar el clima típico del mes |
 
 ## Notas
 
-- Los `.joblib` deben cargarse con las mismas versiones de librerías con que se exportaron (por eso `requirements.txt` fija las de Colab).
-- `shap` es opcional: si no se instala, la app usa las contribuciones nativas de XGBoost, que calculan el mismo TreeSHAP.
-- Los gráficos son SVG propios, sin CDN: la aplicación funciona sin conexión a internet.
-- La limpieza, las 21 variables (`ma3 = media(t−1, t−2, t−3)` con mínimo 2 días, `delta = (t−1) − (t−2)`, `dia_semana` 0 = lunes), los hiperparámetros y el criterio de selección son los del notebook `E2_Capitulo2`. Se reproducen las 1.294 filas, la partición 906/194/194, los P90 (18,35 / 25,56) y el MAE de persistencia (3,125 / 3,242) de la tesis.
+- **Formato de los modelos:** se cargan en el formato nativo de LightGBM (`.txt`), que no depende de la versión de scikit-learn con que se entrenaron.
+- **shap es opcional:** si no se instala, la aplicación usa las contribuciones nativas de LightGBM (`pred_contrib=True`), que calculan el mismo TreeSHAP.
+- **Reproducción del notebook:** la limpieza, las variables y la unión con la meteorología son las del notebook `E2_Capitulo2`. Se obtienen las mismas 1.294 filas, la partición 906/194/194, los P90 (18,35 / 25,56) y exactamente las métricas de prueba del modelo (MAE 2,4045 / 2,4856).
+- **Limitación:** el modelo se entrenó con la meteorología observada (reanálisis ERA5) y en operación recibe un pronóstico, que tiene su propio error. Además, la malla meteorológica (unos 25 km) no resuelve las inversiones térmicas del valle.
+- **Conexión a internet:** solo la necesita la descarga del clima. Los gráficos son SVG propios, sin CDN.

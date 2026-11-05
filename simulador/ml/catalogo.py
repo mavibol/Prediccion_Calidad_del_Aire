@@ -30,6 +30,7 @@ VARIABLES = {
         "umbral_seguro": 15.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Material particulado",
+        "max_deslizador": 300,
         "min_valido": 0.0, "max_valido": 5000.0,
     },
     "pm10": {
@@ -40,6 +41,7 @@ VARIABLES = {
         "umbral_seguro": 45.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Material particulado",
+        "max_deslizador": 500,
         "min_valido": 0.0, "max_valido": 10000.0,
     },
     "carbon_monoxide": {
@@ -50,6 +52,7 @@ VARIABLES = {
         "umbral_seguro": 4000.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "max_deslizador": 20000,
         "min_valido": 0.0, "max_valido": 100000.0,
     },
     "nitrogen_dioxide": {
@@ -60,6 +63,7 @@ VARIABLES = {
         "umbral_seguro": 25.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "max_deslizador": 400,
         "min_valido": 0.0, "max_valido": 20000.0,
     },
     "sulphur_dioxide": {
@@ -70,6 +74,7 @@ VARIABLES = {
         "umbral_seguro": 40.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "max_deslizador": 300,
         "min_valido": 0.0, "max_valido": 100000.0,
     },
     "ozone": {
@@ -80,6 +85,7 @@ VARIABLES = {
         "umbral_seguro": 100.0,
         "fuente_umbral": "guía OMS 2021 (8 h)",
         "grupo": "Gases",
+        "max_deslizador": 400,
         "min_valido": 0.0, "max_valido": 5000.0,
     },
     "aerosol_optical_depth": {
@@ -90,6 +96,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "max_deslizador": 3.0,
         "min_valido": 0.0, "max_valido": 5.0,
     },
     "dust": {
@@ -100,6 +107,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "max_deslizador": 500,
         "min_valido": 0.0, "max_valido": 100000.0,
     },
     "uv_index": {
@@ -110,6 +118,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "max_deslizador": 20,
         "min_valido": 0.0, "max_valido": 50.0,
     },
 }
@@ -137,11 +146,40 @@ ALIAS_CALENDARIO = {
 }
 TRANSFORMACIONES = ("lag1", "lag2", "ma3", "delta")
 
-# Objetivos del escenario A (pronóstico a 24 h)
+
+# Objetivos del escenario C (pronóstico a 24 h + meteorología): modelos LightGBM
+# exportados en formato nativo .txt desde la sección 11 del notebook E2_Capitulo2.
 OBJETIVOS = {
-    "pm2_5": {"etiqueta": "PM₂.₅", "archivo": "modelo_pm2_5_XGBoost.joblib"},
-    "pm10": {"etiqueta": "PM₁₀", "archivo": "modelo_pm10_XGBoost.joblib"},
+    "pm2_5": {"etiqueta": "PM₂.₅", "archivo": "modelo_pm2_5.txt"},
+    "pm10": {"etiqueta": "PM₁₀", "archivo": "modelo_pm10.txt"},
 }
+
+# ---------------------------------------------------------------------------
+# 1b. Clima (escenario C). El usuario NO las escribe: se descargan del
+#     pronóstico de Open-Meteo. Para explicarlas al público, las 30 variables
+#     meteorológicas del modelo (15 de mañana + 15 de hoy) se agrupan en 7 factores.
+#     columna: la variable que se muestra como valor del factor (la de mañana).
+# ---------------------------------------------------------------------------
+CLIMA = {
+    "lluvia": {"etiqueta": "Lluvia", "nombre_largo": "Precipitación acumulada", "unidad": "mm",
+               "columna": "precipitacion_sum", "variables": ["precipitacion_sum"]},
+    "viento": {"etiqueta": "Viento", "nombre_largo": "Velocidad media del viento", "unidad": "km/h",
+               "columna": "viento_vel_media",
+               "variables": ["viento_vel_media", "viento_vel_max", "viento_u_media", "viento_v_media"]},
+    "temperatura": {"etiqueta": "Temperatura", "nombre_largo": "Temperatura media", "unidad": "°C",
+                    "columna": "temp_media",
+                    "variables": ["temp_media", "temp_max", "temp_min", "amplitud_termica"]},
+    "humedad": {"etiqueta": "Humedad", "nombre_largo": "Humedad relativa media", "unidad": "%",
+                "columna": "humedad_media", "variables": ["humedad_media"]},
+    "nubes": {"etiqueta": "Nubes y sol", "nombre_largo": "Nubosidad media", "unidad": "%",
+              "columna": "nubosidad_media", "variables": ["nubosidad_media", "radiacion_sum"]},
+    "presion": {"etiqueta": "Presión", "nombre_largo": "Presión atmosférica media", "unidad": "hPa",
+                "columna": "presion_media", "variables": ["presion_media"]},
+    "capa_mezcla": {"etiqueta": "Capa de mezcla", "nombre_largo": "Altura media de la capa límite", "unidad": "m",
+                    "columna": "capa_limite_media", "variables": ["capa_limite_media", "capa_limite_min"]},
+}
+# variable meteorológica diaria -> factor de clima
+CLIMA_DE = {v: g for g, meta in CLIMA.items() for v in meta["variables"]}
 
 # ---------------------------------------------------------------------------
 # 2. Semáforo de 5 niveles, mapeado del ICA de la Resolución 2254 de 2017
@@ -193,7 +231,7 @@ NIVELES = [
 ACTIVIDADES = [
     {"id": "ciclismo", "etiqueta": "Ciclismo", "icono": "bike"},
     {"id": "running", "etiqueta": "Correr", "icono": "run"},
-    {"id": "tapabocas", "etiqueta": "Tapabocas", "icono": "mask"},
+    {"id": "jardineria", "etiqueta": "Jardinería", "icono": "sun"},
     {"id": "ventilacion", "etiqueta": "Ventilar espacios", "icono": "window"},
     {"id": "sensibles", "etiqueta": "Niños y grupos sensibles", "icono": "users"},
 ]
@@ -202,35 +240,35 @@ RECOMENDACIONES = {
     "sin_contaminacion": {
         "ciclismo": ("si", "Buen momento para rodar, incluso rutas largas."),
         "running": ("si", "Sin restricciones para entrenar al aire libre."),
-        "tapabocas": ("si", "No es necesario por calidad del aire."),
+        "jardineria": ("si", "Buen momento para cuidar el jardín al aire libre."),
         "ventilacion": ("si", "Abre ventanas y renueva el aire de tu casa u oficina."),
         "sensibles": ("si", "Pueden jugar y hacer actividad al aire libre con normalidad."),
     },
     "bajo": {
         "ciclismo": ("si", "Adelante. Prefiere ciclorrutas alejadas de avenidas con mucho tráfico."),
         "running": ("si", "Puedes correr; si eres muy sensible, evita series intensas junto a vías."),
-        "tapabocas": ("si", "No es necesario para la mayoría; opcional si tienes asma."),
+        "jardineria": ("si", "Puedes cuidar el jardín; evita las horas de más tráfico."),
         "ventilacion": ("si", "Ventila, idealmente fuera de las horas pico de tráfico."),
         "sensibles": ("precaucion", "Vigila síntomas (tos, falta de aire) en esfuerzos prolongados."),
     },
     "moderado": {
         "ciclismo": ("precaucion", "Reduce la intensidad y la duración; elige rutas con menos tráfico."),
         "running": ("precaucion", "Acorta la sesión o entrena en interiores si notas molestias."),
-        "tapabocas": ("precaucion", "Recomendado N95/KN95 para grupos sensibles al aire libre."),
+        "jardineria": ("precaucion", "Reduce el tiempo al aire libre y haz pausas si notas molestias."),
         "ventilacion": ("precaucion", "Ventila poco tiempo y en horas de menor tráfico; un filtro HEPA ayuda."),
         "sensibles": ("no", "Eviten el ejercicio intenso al aire libre; tengan a mano su medicación."),
     },
     "alto": {
-        "ciclismo": ("no", "Evita el ciclismo deportivo; si debes desplazarte, usa N95 y trayectos cortos."),
+        "ciclismo": ("no", "Evita el ciclismo deportivo; si debes salir, usa tapabocas y haz trayectos cortos."),
         "running": ("no", "Entrena en interiores hoy."),
-        "tapabocas": ("no", "Usa N95/KN95 bien ajustado si sales (toda la población)."),
+        "jardineria": ("no", "Pospón la jardinería; si debes salir, usa tapabocas."),
         "ventilacion": ("no", "Mantén ventanas cerradas en horas pico; usa purificador si tienes."),
         "sensibles": ("no", "Permanezcan en interiores; consulten al médico ante síntomas."),
     },
     "critico": {
         "ciclismo": ("no", "No salgas a rodar."),
         "running": ("no", "Suspende toda actividad física al aire libre."),
-        "tapabocas": ("no", "N95/KN95 obligatorio si es imprescindible salir."),
+        "jardineria": ("no", "Evita la jardinería; si salir es imprescindible, usa tapabocas."),
         "ventilacion": ("no", "Ventanas cerradas; sella rendijas y usa filtro HEPA."),
         "sensibles": ("no", "Permanezcan en interiores y sigan las indicaciones de las autoridades."),
     },
@@ -242,30 +280,11 @@ GRUPOS = {
     "Gases": ["carbon_monoxide", "nitrogen_dioxide", "sulphur_dioxide", "ozone"],
     "Aerosoles y radiación": ["aerosol_optical_depth", "dust", "uv_index"],
     "Calendario": ["mes", "dia_semana"],
+    "Clima": list(CLIMA),
 }
 
 # ---------------------------------------------------------------------------
-# 4. Resultados oficiales reportados en la tesis (Capítulo 3, conjunto de prueba)
-#    Se muestran en el comparador como referencia fija, junto al benchmark que
-#    recalcula scripts/construir_artefactos.py.
-# ---------------------------------------------------------------------------
-RESULTADOS_TESIS = {
-    "particion": {"entrenamiento": 906, "validacion": 194, "prueba": 194},
-    "prueba": [
-        {"modelo": "Persistencia (t−1)", "pm2_5": {"mae": 3.125, "r2": -0.003},
-         "pm10": {"mae": 3.242, "r2": -0.009}},
-        {"modelo": "A · Pronóstico 24 h (XGBoost)", "pm2_5": {"mae": 2.432, "r2": 0.339},
-         "pm10": {"mae": 2.558, "r2": 0.352}, "desplegado": True},
-        {"modelo": "B · Mismo día (LightGBM / XGBoost)", "pm2_5": {"mae": 1.798, "r2": 0.691},
-         "pm10": {"mae": 1.742, "r2": 0.696}},
-    ],
-    "validacion_xgb_a": {"pm2_5": {"mae": 2.74, "r2": 0.26}, "pm10": {"mae": 2.97, "r2": 0.26}},
-    "mejora_vs_persistencia": {"pm2_5": 22.2, "pm10": 21.1},
-    "criterio": "Ranking compuesto en validación (MAE + RMSE + R²)",
-}
-
-# ---------------------------------------------------------------------------
-# 5. Lenguaje para el público general (sin jerga técnica)
+# 4. Lenguaje para el público general (sin jerga técnica)
 # ---------------------------------------------------------------------------
 # nombre: forma sencilla de nombrarla · icono: clave SVG · que_es: una línea.
 SENCILLO = {
@@ -286,7 +305,24 @@ SENCILLO = {
     "dust": {"nombre": "Polvo del desierto", "icono": "dunes",
              "que_es": "Polvo que llega desde muy lejos, como el Sahara."},
     "uv_index": {"nombre": "Fuerza del sol", "icono": "sun",
-                 "que_es": "Radiación del sol; ayuda a que se forme ozono."},
+                                  "que_es": "Radiación del sol; ayuda a que se forme ozono."},
+                                  
+    # Factores de clima (escenario C)
+    "lluvia": {"nombre": "Lluvia", "icono": "rain",
+               "que_es": "La lluvia lava el aire: arrastra las partículas hasta el suelo."},
+    "viento": {"nombre": "Viento", "icono": "air",
+               "que_es": "El viento dispersa la contaminación y la saca del valle."},
+    "temperatura": {"nombre": "Temperatura", "icono": "thermo",
+                    "que_es": "Mañanas frías y tardes calientes indican aire quieto que atrapa el humo."},
+    "humedad": {"nombre": "Humedad", "icono": "drop",
+                "que_es": "Cuánta agua hay en el aire; cambia el tamaño y el peso de las partículas."},
+    "nubes": {"nombre": "Nubes y sol", "icono": "cloud",
+              "que_es": "Con más sol se forma más ozono; las nubes suelen venir con lluvia."},
+    "presion": {"nombre": "Presión del aire", "icono": "target",
+                "que_es": "La presión alta suele traer aire estable, que dispersa menos el humo."},
+    "capa_mezcla": {"nombre": "Altura de mezcla", "icono": "arrowUp",
+                    "que_es": "Qué tan alto se mezcla el aire; si es baja, el humo queda atrapado cerca del suelo."},
+
 }
 
 # Clave SVG, título y frase de cada nivel del semáforo
@@ -301,18 +337,18 @@ NIVELES_SENCILLO = {
 # Recomendaciones en máximo 6 palabras
 RECOMENDACIONES_CORTAS = {
     "sin_contaminacion": {"ciclismo": "¡A rodar!", "running": "Sal a correr",
-                          "tapabocas": "No hace falta", "ventilacion": "Abre las ventanas",
+                          "jardineria": "Disfruta el jardín", "ventilacion": "Abre las ventanas",
                           "sensibles": "Pueden jugar afuera"},
     "bajo": {"ciclismo": "Sí, lejos de avenidas", "running": "Sí, con calma",
-             "tapabocas": "No hace falta", "ventilacion": "Ventila fuera de hora pico",
+             "jardineria": "Evita horas de tráfico", "ventilacion": "Ventila fuera de hora pico",
              "sensibles": "Vigila tos o ahogo"},
     "moderado": {"ciclismo": "Rutas cortas y tranquilas", "running": "Mejor bajo techo",
-                 "tapabocas": "N95 si eres sensible", "ventilacion": "Ventila poco tiempo",
+                 "jardineria": "Reduce tiempo al aire libre", "ventilacion": "Ventila poco tiempo",
                  "sensibles": "Eviten esfuerzos afuera"},
     "alto": {"ciclismo": "Hoy no", "running": "Entrena adentro",
-             "tapabocas": "Usa N95 al salir", "ventilacion": "Ventanas cerradas",
+             "jardineria": "Pospón la jardinería", "ventilacion": "Ventanas cerradas",
              "sensibles": "Quédense adentro"},
     "critico": {"ciclismo": "No salgas", "running": "Suspende el ejercicio",
-                "tapabocas": "N95 obligatorio", "ventilacion": "Todo cerrado",
+                "jardineria": "Evita la jardinería", "ventilacion": "Todo cerrado",
                 "sensibles": "Quédense adentro"},
 }

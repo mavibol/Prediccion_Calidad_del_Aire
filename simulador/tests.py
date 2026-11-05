@@ -1,6 +1,7 @@
 """
-Pruebas de la app. Son autosuficientes: entrenan modelos pequeños de
-scikit-learn en una carpeta temporal, así que no dependen de los .joblib reales.
+Pruebas de la app. Son autosuficientes: entrenan modelos LightGBM pequeños del
+escenario C en una carpeta temporal, así que no dependen de los modelos reales.
+No consultan Internet: usan el clima típico de cada mes (AIRE_METEO_EN_LINEA=False).
 
     python manage.py test simulador
 """
@@ -9,15 +10,17 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import joblib
+from unittest import mock
+
+import lightgbm as lgb
 from django.conf import settings
 from django.test import Client, TestCase, override_settings
-from sklearn.ensemble import GradientBoostingRegressor
-from xgboost import XGBRegressor
 
 from .ml import catalogo as cat
-from .ml.datos import cargar_y_limpiar, columnas_escenario_a, construir_features, particion_cronologica
-from .ml_service import ServicioML, nivel_ica, nombre_canonico, reiniciar_servicio
+from .ml import meteo
+from .ml.datos import (cargar_meteo, cargar_y_limpiar, columnas_escenario_c, construir_features,
+                       particion_cronologica)
+from .ml_service import ServicioML, nivel_ica, nombre_canonico, reiniciar_servicio, variable_de
 
 URL_PREDECIR = "/api/predecir/"
 
@@ -27,13 +30,13 @@ class BaseConModelos(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.tmp = Path(tempfile.mkdtemp())
-        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV))
+        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV), cargar_meteo(settings.AIRE_RUTA_METEO))
         tr, _, _ = particion_cronologica(mat)
-        X = tr[columnas_escenario_a()]
+        X = tr[columnas_escenario_c()]
         for clave, conf in cat.OBJETIVOS.items():
-            m = GradientBoostingRegressor(n_estimators=25, max_depth=3, random_state=0)
-            joblib.dump(m.fit(X, tr[f"y_{clave}"]), cls.tmp / conf["archivo"])
-        cls._ajustes = override_settings(AIRE_DIR_MODELOS=cls.tmp)
+            m = lgb.LGBMRegressor(n_estimators=40, num_leaves=7, random_state=0, verbose=-1)
+            m.fit(X, tr[f"y_{clave}"]).booster_.save_model(cls.tmp / conf["archivo"])
+        cls._ajustes = override_settings(AIRE_DIR_MODELOS=cls.tmp, AIRE_METEO_EN_LINEA=False)
         cls._ajustes.enable()
         reiniciar_servicio()
 
@@ -50,27 +53,48 @@ class BaseConModelos(TestCase):
                       content_type="application/json")
 
 
-class ModelosNativosXGBoostTests(TestCase):
-    def test_carga_json_nativo_preferido_sobre_joblib(self):
-        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV))
-        tr, _, _ = particion_cronologica(mat)
-        columnas = columnas_escenario_a()
+class EscenarioCTests(BaseConModelos):
+    def test_carga_lightgbm_txt_con_51_variables(self):
+        from .ml_service import obtener_servicio
+        s = obtener_servicio()
+        self.assertTrue(s.listo, s.error_carga)
+        self.assertTrue(s.usa_meteo)
+        for obj in s.objetivos.values():
+            self.assertEqual(len(obj.columnas), 51)
+            self.assertTrue(obj.archivo.endswith(".txt"))
 
-        with tempfile.TemporaryDirectory() as temp:
-            carpeta = Path(temp)
-            for clave, conf in cat.OBJETIVOS.items():
-                modelo = XGBRegressor(n_estimators=5, max_depth=2, n_jobs=1, random_state=0)
-                modelo.fit(tr[columnas], tr[f"y_{clave}"])
-                modelo.save_model(carpeta / conf["archivo"].replace(".joblib", ".json"))
-                joblib.dump("archivo joblib ignorado", carpeta / conf["archivo"])
+    def test_sin_internet_usa_clima_tipico_del_mes(self):
+        d = self.predecir([{"variable": "pm2_5", "valor": 20}]).json()
+        self.assertFalse(d["clima"]["disponible"])
+        nombres = {f["variable"] for k in ("pm2_5", "pm10")
+                   for lado in ("favorables", "desfavorables") for f in d["explicacion"][k]["simple"][lado]}
+        self.assertTrue(nombres <= set(cat.VARIABLES) | set(cat.CLIMA))
 
-            servicio = ServicioML(carpeta, settings.AIRE_RUTA_CSV)
+    def test_con_pronostico_del_clima(self):
+        from .ml_service import obtener_servicio
+        s = obtener_servicio()
+        hoy = {c: s.clima_mes[1][c] for c in meteo.COLS_METEO}
+        lluvioso = {**hoy, "precipitacion_sum": 30.0}
+        try:
+            s.meteo_en_linea, s._cache_meteo = True, None
+            with mock.patch("simulador.ml_service.descargar_hoy_y_manana", return_value=(hoy, lluvioso, "2026-01-15")):
+                d = self.predecir([{"variable": "pm2_5", "valor": 20}]).json()
+        finally:
+            s.meteo_en_linea, s._cache_meteo = False, None
+        self.assertTrue(d["clima"]["disponible"])
+        lluvia = next(x for x in d["clima"]["resumen"] if x["id"] == "lluvia")
+        self.assertEqual(lluvia["valor"], 30.0)
 
-        self.assertTrue(servicio.listo, servicio.error_carga)
-        self.assertEqual(
-            {objetivo.archivo for objetivo in servicio.objetivos.values()},
-            {"modelo_pm2_5_XGBoost.json", "modelo_pm10_XGBoost.json"},
-        )
+    def test_agregacion_diaria_igual_al_notebook(self):
+        import pandas as pd
+        t = pd.date_range("2026-01-01", periods=48, freq="h")
+        h = pd.DataFrame({"time": t, "temperature_2m": 20.0, "relative_humidity_2m": 80.0, "precipitation": 0.5,
+                          "wind_speed_10m": 10.0, "wind_direction_10m": 90.0, "shortwave_radiation": 100.0,
+                          "cloud_cover": 50.0, "surface_pressure": 850.0, "boundary_layer_height": 400.0})
+        d = meteo.agregar_diario(h)
+        self.assertEqual(set(d.columns) - {"date"}, set(meteo.COLS_METEO))
+        self.assertAlmostEqual(d["precipitacion_sum"].iloc[0], 12.0)
+        self.assertAlmostEqual(d["viento_u_media"].iloc[0], -10.0)
 
 
 class PaginaYCatalogoTests(BaseConModelos):
@@ -79,13 +103,26 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'id="catalogo-variables"')
         self.assertContains(r, 'id="lista-variables"')
+        self.assertContains(r, 'id="btn-predecir"')
+        self.assertContains(r, "> Predecir")
         self.assertContains(r, "csrf-token")
-        self.assertContains(r, "Atribución calculada mediante")
-        self.assertContains(r, "SHapley Additive exPlanations")
-        self.assertContains(r, "E[f(X)]")
-        self.assertContains(r, 'id="ficha-modelo"')
-        self.assertContains(r, 'id="grafico-cascada"')
-        self.assertContains(r, "Modo técnico")
+        self.assertContains(r, "PM₂.₅ mañana")
+        self.assertContains(r, "Recomendaciones para tu día")
+        self.assertContains(r, "¿Por qué cambia el aire mañana?")
+        self.assertContains(r, 'aria-label="Escala de calidad; se resaltará al calcular el pronóstico"')
+        self.assertContains(r, 'class="rec-card rec-card--pendiente"', count=3)
+        self.assertNotContains(r, 'id="bienvenida"')
+        self.assertContains(r, "Sube la contaminación")
+        self.assertContains(r, "Baja el pronóstico")
+        self.assertContains(r, 'id="clima-manana"')
+        self.assertNotContains(r, "Modo técnico")
+        self.assertNotContains(r, "Precisión del Modelo")
+        self.assertNotContains(r, 'id="ficha-modelo"')
+        self.assertNotContains(r, 'id="grafico-cascada"')
+
+    def test_endpoints_de_metricas_tecnicas_no_estan_disponibles(self):
+        self.assertEqual(self.client.get("/api/benchmark/").status_code, 404)
+        self.assertEqual(self.client.get("/api/estado/").status_code, 404)
 
     def test_catalogo_solo_variables_del_dataset(self):
         datos = self.client.get("/api/variables/").json()
@@ -100,6 +137,14 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertEqual(por_id["pm2_5"]["etiqueta"], "PM₂.₅")
         self.assertEqual(por_id["pm2_5"]["nombre_largo"], "Material particulado fino")
         self.assertEqual((por_id["pm2_5"]["min_valido"], por_id["pm2_5"]["max_valido"]), (0.0, 5000.0))
+        maximos_deslizador = {
+            "pm2_5": 300, "pm10": 500, "carbon_monoxide": 20000,
+            "nitrogen_dioxide": 400, "sulphur_dioxide": 300, "ozone": 400,
+            "aerosol_optical_depth": 3.0, "dust": 500, "uv_index": 20,
+        }
+        for variable, maximo in maximos_deslizador.items():
+            self.assertEqual(por_id[variable]["max_deslizador"], maximo)
+            self.assertLess(maximo, por_id[variable]["max_valido"])
         self.assertEqual((por_id["aerosol_optical_depth"]["min_valido"],
                           por_id["aerosol_optical_depth"]["max_valido"]), (0.0, 5.0))
         self.assertEqual((por_id["uv_index"]["min_valido"], por_id["uv_index"]["max_valido"]), (0.0, 50.0))
@@ -111,7 +156,7 @@ class PaginaYCatalogoTests(BaseConModelos):
 
 
 class PrediccionTests(BaseConModelos):
-    def test_subconjunto_de_variables_y_shap_aditivo(self):
+    def test_subconjunto_de_variables_y_explicacion_publica(self):
         r = self.predecir([{"variable": "pm2_5", "valor": "21,5"},
                            {"variable": "nitrogen_dioxide", "valor": 18}])
         self.assertEqual(r.status_code, 200)
@@ -121,18 +166,14 @@ class PrediccionTests(BaseConModelos):
         self.assertEqual(d["entrada"]["completitud"], {
             "ingresadas": 2, "total": len(cat.VARIABLES), "porcentaje": 22.2,
         })
-        self.assertEqual(d["tecnico"]["imputacion"], "iterativa")
+        self.assertNotIn("tecnico", d)
+        self.assertNotIn("cobertura", d)
         for clave in ("pm2_5", "pm10"):
-            self.assertTrue(d["explicacion"][clave]["verificacion_aditiva"]["ok"])
-            self.assertEqual(len(d["explicacion"][clave]["detalle"]), 21)
-            pred = d["predicciones"][clave]
-            intervalo = pred["intervalo_p95"]
-            self.assertLessEqual(intervalo["inferior"], pred["valor"])
-            self.assertGreaterEqual(intervalo["superior"], pred["valor"])
-            self.assertGreater(pred["margen_p95"], 0)
-            self.assertIn("validación cronológico", intervalo["referencia"])
-            self.assertGreater(pred["rmse_prueba"], 0)
+            self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel"})
+            self.assertEqual(set(d["explicacion"][clave]), {"simple"})
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
+        ids_recomendaciones = {r["id"] for r in d["recomendaciones"]}
+        self.assertTrue({"running", "sensibles", "ventilacion"}.issubset(ids_recomendaciones))
         self.assertIn(d["alerta"]["nivel"], [n["id"] for n in cat.NIVELES])
 
     def test_explicacion_para_publico_general(self):
@@ -141,21 +182,19 @@ class PrediccionTests(BaseConModelos):
         for k in ("cara", "titulo", "frase"):
             self.assertTrue(a[k])
         s = d["explicacion"][a["contaminante"]]["simple"]
-        self.assertTrue(s["frase"].startswith("El valor predicho"))
         self.assertLessEqual(len(s["desfavorables"]), 3)
         self.assertLessEqual(len(s["favorables"]), 3)
-        self.assertAlmostEqual(s["valor_base"], d["explicacion"][a["contaminante"]]["valor_base"], places=3)
-        self.assertAlmostEqual(s["prediccion"], d["explicacion"][a["contaminante"]]["prediccion"], places=3)
+        self.assertAlmostEqual(
+            s["prediccion"], d["predicciones"][a["contaminante"]]["valor"], delta=0.011)
         self.assertTrue(all(f["aporte"] >= 0 for f in s["desfavorables"]))
         self.assertTrue(all(f["aporte"] <= 0 for f in s["favorables"]))
         for f in s["desfavorables"] + s["favorables"]:
-            self.assertIn("µg/m³", f["unidad"])
+            if f["tipo"] == "aire":
+                self.assertIn("µg/m³", f["unidad"])
             self.assertIn("—", f["nombre"])
-        self.assertIn(d["cobertura"]["puntos"], range(1, 6))
         self.assertTrue(all(len(r["corto"].split()) <= 6 for r in d["recomendaciones"]))
 
-    def test_mas_variables_mas_cobertura(self):
-        una = self.predecir([{"variable": "pm2_5", "valor": 15}]).json()
+    def test_todas_las_variables_evitan_estimaciones(self):
         todas = self.predecir([{"variable": v, "valor": cat_v, "valor_previo": cat_v}
                                for v, cat_v in [("pm2_5", 15), ("pm10", 20),
                                                 ("carbon_monoxide", 400),
@@ -163,8 +202,6 @@ class PrediccionTests(BaseConModelos):
                                                 ("sulphur_dioxide", 4), ("ozone", 55),
                                                 ("aerosol_optical_depth", 0.24),
                                                 ("dust", 0), ("uv_index", 1.8)]]).json()
-        self.assertGreater(todas["cobertura"]["porcentaje"], una["cobertura"]["porcentaje"])
-        self.assertAlmostEqual(todas["cobertura"]["porcentaje"], 100.0, places=0)
         self.assertEqual(todas["entrada"]["estimadas"], [])
         self.assertEqual(todas["entrada"]["completitud"]["ingresadas"], len(cat.VARIABLES))
         self.assertEqual(todas["entrada"]["completitud"]["porcentaje"], 100.0)
@@ -176,20 +213,24 @@ class PrediccionTests(BaseConModelos):
         self.assertTrue(d["avisos"])
 
     def test_acepta_valores_superiores_al_maximo_historico(self):
-<<<<<<< HEAD
         r = self.predecir([{"variable": "pm10", "valor": 9000}])
         self.assertEqual(r.status_code, 200, r.json())
         datos = r.json()
         self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 9000)
-=======
-        r = self.predecir([{"variable": "pm10", "valor": 1000}])
-        self.assertEqual(r.status_code, 200, r.json())
-        datos = r.json()
-        self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 1000)
->>>>>>> rama_maira
         self.assertTrue(any("menos confiable" in aviso for aviso in datos["avisos"]))
         cero = self.predecir([{"variable": "pm10", "valor": 0}])
         self.assertEqual(cero.status_code, 200, cero.json())
+
+    def test_pm25_150_aceptado_y_avisa_fuera_de_entrenamiento(self):
+        r = self.predecir([{"variable": "pm2_5", "valor": 150}])
+        self.assertEqual(r.status_code, 200, r.json())
+        datos = r.json()
+        self.assertTrue(datos["ok"])
+        self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 150)
+        self.assertTrue(any(
+            "fuera del rango de entrenamiento" in aviso.lower()
+            for aviso in datos["avisos"]
+        ))
 
     def test_acepta_limites_superiores_plausibles(self):
         variables = [{"variable": variable, "valor": meta["max_valido"]}
@@ -204,15 +245,10 @@ class PrediccionTests(BaseConModelos):
             [{"variable": "us_aqi", "valor": 50}],
             [{"variable": "pm10", "valor": "abc"}],
             [{"variable": "pm10", "valor": -3}],
-<<<<<<< HEAD
             [{"variable": "pm10", "valor": 10000.01}],
             [{"variable": "uv_index", "valor": 50.01}],
             [{"variable": "aerosol_optical_depth", "valor": 5.01}],
             [{"variable": "pm10", "valor": 10, "valor_previo": 10000.01}],
-=======
-            [{"variable": "pm10", "valor": 1000.01}],
-            [{"variable": "pm10", "valor": 10, "valor_previo": 1000.01}],
->>>>>>> rama_maira
             [{"variable": "pm10", "valor": 10}, {"variable": "pm10", "valor": 12}],
         ]
         for variables in casos:
@@ -234,26 +270,6 @@ class PrediccionTests(BaseConModelos):
         r = self.predecir([{"variable": "pm2_5", "valor": 10}], client=cliente)
         self.assertEqual(r.status_code, 403)
 
-    def test_benchmark_incluye_resultados_tesis(self):
-        d = self.client.get("/api/benchmark/").json()
-        self.assertTrue(d["ok"])
-        self.assertEqual(d["tesis"]["particion"]["entrenamiento"], 906)
-        for clave in cat.OBJETIVOS:
-            metricas = d["metricas_validacion"][clave]
-            self.assertGreater(metricas["muestras"], 0)
-            self.assertGreater(metricas["mae"], 0)
-            self.assertGreater(metricas["rmse"], 0)
-            self.assertIn("r2", metricas)
-
-    def test_estado_expone_ficha_de_modelo_y_metricas(self):
-        d = self.client.get("/api/estado/").json()
-        self.assertTrue(d["ok"])
-        self.assertEqual(set(d["modelos"]), set(cat.OBJETIVOS))
-        for modelo in d["modelos"].values():
-            self.assertTrue(modelo["tipo"])
-            self.assertGreater(modelo["metricas_validacion"]["muestras"], 0)
-
-
 class SinModelosTests(TestCase):
     def test_responde_503_si_faltan_modelos(self):
         vacia = Path(tempfile.mkdtemp())
@@ -274,6 +290,9 @@ class UtilidadesTests(TestCase):
         self.assertEqual(nombre_canonico("NO2_lag1"), "nitrogen_dioxide_lag1")
         self.assertEqual(nombre_canonico("pm25_ma3"), "pm2_5_ma3")
         self.assertEqual(nombre_canonico("month"), "mes")
+        self.assertEqual(nombre_canonico("viento_vel_media_lag1"), "viento_vel_media_lag1")
+        self.assertEqual(variable_de("precipitacion_sum_lag1"), "lluvia")
+        self.assertEqual(variable_de("temp_media"), "temperatura")
         with self.assertRaises(ValueError):
             nombre_canonico("temperatura_lag1")
 

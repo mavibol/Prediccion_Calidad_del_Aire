@@ -11,7 +11,7 @@ Orden de preferencia:
 Las tres vías calculan los valores SHAP "path-dependent" (Lundberg et al., 2018),
 así que cumplen la propiedad aditiva:
         predicción = valor_base + Σ contribuciones
-Esa propiedad se verifica en cada respuesta de la API.
+El servicio usa esa propiedad para resumir los aportes por variable.
 """
 from __future__ import annotations
 

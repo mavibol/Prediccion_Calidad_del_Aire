@@ -32,8 +32,6 @@ def inicio(request):
         "config_front": {
             "api": {
                 "predecir": reverse("simulador:api_predecir"),
-                "benchmark": reverse("simulador:api_benchmark"),
-                "estado": reverse("simulador:api_estado"),
             },
             "listo": servicio.listo,
             "error_carga": servicio.error_carga,
@@ -52,7 +50,8 @@ def api_variables(request):
 def api_predecir(request):
     """POST JSON:
         {"variables": [{"variable": "pm2_5", "valor": 25.5, "valor_previo": 18}, ...]}
-    Respuesta: predicción, semáforo, recomendaciones y explicación SHAP.
+    Respuesta: predicción, semáforo, recomendaciones y factores explicados
+    en lenguaje sencillo.
     """
     if request.content_type != "application/json":
         return _error("Envía el cuerpo como application/json.", 415)
@@ -69,13 +68,3 @@ def api_predecir(request):
     except Exception:  # noqa: BLE001 - nunca exponer trazas al usuario
         log.exception("Fallo inesperado en la predicción")
         return _error("Ocurrió un error interno al calcular la predicción.", 500)
-
-
-@require_GET
-def api_benchmark(request):
-    return JsonResponse({"ok": True, **obtener_servicio().benchmark()})
-
-
-@require_GET
-def api_estado(request):
-    return JsonResponse({"ok": True, **obtener_servicio().estado()})

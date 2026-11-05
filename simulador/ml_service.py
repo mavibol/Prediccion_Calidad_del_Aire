@@ -26,14 +26,15 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost.core import XGBoostError
 
 from .ml import catalogo as cat
-from .ml.datos import (VARIABLES_BASE, cargar_y_limpiar, columnas_escenario_a,
-                       construir_features, fila_desde_lecturas, particion_cronologica)
+from .ml.datos import (VARIABLES_BASE, cargar_meteo, cargar_y_limpiar, columnas_escenario_a,
+                       columnas_escenario_c, construir_features, fila_desde_lecturas,
+                       particion_cronologica)
+from .ml.meteo import COLS_METEO, descargar_hoy_y_manana, es_meteo
 from .ml.explicadores import crear_explicador
-from .ml.narrativa import construir_narrativa, explicacion_simple, fmt
+from .ml.narrativa import explicacion_simple, fmt
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ class ModeloObjetivo:
 def nombre_canonico(nombre: str) -> str:
     """'NO2_lag1' -> 'nitrogen_dioxide_lag1'; 'month' -> 'mes'."""
     n = nombre.strip().lower().replace(" ", "_")
+    if es_meteo(n):                      # escenario C: 'viento_vel_media', 'viento_vel_media_lag1'
+        return n
     if n in cat.ALIAS_CALENDARIO:
         return cat.ALIAS_CALENDARIO[n]
     for t in cat.TRANSFORMACIONES:
@@ -81,6 +84,8 @@ def variable_de(canonica: str) -> str:
     """'pm2_5_ma3' -> 'pm2_5'; 'mes' -> 'calendario'."""
     if canonica in ("mes", "dia_semana"):
         return "calendario"
+    if es_meteo(canonica):               # 'precipitacion_sum_lag1' -> 'lluvia'
+        return cat.CLIMA_DE[canonica[:-5] if canonica.endswith("_lag1") else canonica]
     return canonica.rsplit("_", 1)[0]
 
 
@@ -94,6 +99,8 @@ def columnas_del_modelo(modelo, dir_modelos: Path) -> list[str]:
         cols = modelo.get_booster().feature_names
         if cols:
             return list(cols)
+    if callable(getattr(modelo, "feature_name", None)):    # lightgbm.Booster (.txt)
+        return list(modelo.feature_name())
     meta = dir_modelos / "metadatos_modelos.json"
     if meta.exists():
         datos = json.loads(meta.read_text(encoding="utf-8"))
@@ -140,12 +147,20 @@ def nivel_ica(contaminante: str, valor: float) -> dict:
 # Servicio
 # ---------------------------------------------------------------------------
 class ServicioML:
-    def __init__(self, dir_modelos: Path, ruta_csv: Path, imputacion: str = "iterativa"):
+    def __init__(self, dir_modelos: Path, ruta_csv: Path, imputacion: str = "iterativa",
+                 ruta_meteo: Path | None = None, meteo_en_linea: bool = True):
         self.dir_modelos = Path(dir_modelos)
         self.ruta_csv = Path(ruta_csv)
+        self.ruta_meteo = Path(ruta_meteo) if ruta_meteo else None
+        self.meteo_en_linea = meteo_en_linea
         self.metodo_imputacion = imputacion
         self.objetivos: dict[str, ModeloObjetivo] = {}
         self.error_carga: str | None = None
+        self.usa_meteo = False
+        self._cache_meteo = None                 # (instante, resultado) del último pronóstico del clima
+        meta = self.dir_modelos / "metadatos_modelos.json"
+        ubic = json.loads(meta.read_text(encoding="utf-8")).get("ubicacion", {}) if meta.exists() else {}
+        self.ubicacion = (ubic.get("latitud", 6.2518), ubic.get("longitud", -75.5636))
         self._cargar_datos()
         try:
             self._cargar_modelos()
@@ -164,8 +179,11 @@ class ServicioML:
     # ---- 1. Datos de referencia (no dependen del modelo) -----------------
     def _cargar_datos(self):
         df = cargar_y_limpiar(self.ruta_csv)
-        mat = construir_features(df)
-        self.train, self.val, self.test = particion_cronologica(mat)
+        self.meteo = None
+        if self.ruta_meteo is not None and self.ruta_meteo.exists():
+            self.meteo = cargar_meteo(self.ruta_meteo)
+        mat = construir_features(df, self.meteo)
+        self.train, _, _ = particion_cronologica(mat)
         dias_train = df.loc[self.train.index.min() - pd.Timedelta(days=2):self.train.index.max()]
         self.dias_train = dias_train[VARIABLES_BASE]
         self.stats = {}
@@ -177,7 +195,15 @@ class ServicioML:
                 "p10": float(s.quantile(.10)), "p90": float(s.quantile(.90)),
             }
         self.p90 = {"pm2_5": float(self.train["y_pm2_5"].quantile(.9)),
-                    "pm10": float(self.train["y_pm10"].quantile(.9))}
+                        "pm10": float(self.train["y_pm10"].quantile(.9))}
+        if self.meteo is not None:
+            # Respaldo sin internet: promedio histórico de cada variable meteorológica por mes
+            self.clima_mes = {int(m): g.mean().to_dict()
+                              for m, g in self.meteo.groupby(self.meteo.index.month)}
+            for g, meta in cat.CLIMA.items():      # "lo normal" de cada factor de clima
+                s = self.meteo[meta["columna"]]
+                self.stats[g] = {"min": float(s.min()), "max": float(s.max()), "mediana": float(s.median()),
+                        "p10": float(s.quantile(.10)), "p90": float(s.quantile(.90))}
         self._ajustar_imputador()
 
     def _ajustar_imputador(self):
@@ -203,37 +229,42 @@ class ServicioML:
         faltan = [
             conf["archivo"] for conf in cat.OBJETIVOS.values()
             if not (self.dir_modelos / conf["archivo"]).exists()
-            and not (self.dir_modelos / conf["archivo"]).with_suffix(".json").exists()
         ]
         if faltan:
             raise ModelosNoDisponibles(
                 "Faltan los modelos " + ", ".join(faltan) + f" en {self.dir_modelos}. "
-                "Copia los modelos exportados desde Colab o ejecuta "
-                "`python scripts/construir_artefactos.py`.")
+                "Copia los modelos exportados en la sección 11 del notebook E2_Capitulo2 "
+                "(modelo_pm2_5.txt, modelo_pm10.txt y metadatos_modelos.json).")
         for clave, conf in cat.OBJETIVOS.items():
             ruta = self.dir_modelos / conf["archivo"]
-            ruta_nativa = ruta.with_suffix(".json")
-            if ruta_nativa.exists():
+            if ruta.suffix == ".txt":                 # LightGBM en formato nativo
+                import lightgbm as lgb
+                modelo = lgb.Booster(model_file=str(ruta))
+            elif ruta.suffix == ".json":              # XGBoost en formato nativo
                 import xgboost as xgb
                 modelo = xgb.XGBRegressor()
-                modelo.load_model(ruta_nativa)
-                archivo_modelo = ruta_nativa.name
+                modelo.load_model(ruta)
             else:
                 modelo = joblib.load(ruta)
-                archivo_modelo = ruta.name
+            archivo_modelo = ruta.name
             columnas = columnas_del_modelo(modelo, self.dir_modelos)
             canonicas = [nombre_canonico(c) for c in columnas]
-            esperadas = set(columnas_escenario_a())
+            self.usa_meteo = any(es_meteo(c) for c in canonicas)
+            escenario = "C" if self.usa_meteo else "A"
+            esperadas = set(columnas_escenario_c() if self.usa_meteo else columnas_escenario_a())
             if set(canonicas) != esperadas:
                 raise ModelosNoDisponibles(
-                    f"{conf['archivo']}: las variables no coinciden con el escenario A. "
+                    f"{conf['archivo']}: las variables no coinciden con el escenario {escenario}. "
                     f"Sobran {sorted(set(canonicas) - esperadas)}, "
                     f"faltan {sorted(esperadas - set(canonicas))}.")
+            if self.usa_meteo and self.meteo is None:
+                raise ModelosNoDisponibles(
+                    "El modelo usa variables meteorológicas y falta el archivo "
+                    f"{self.ruta_meteo}. Cópialo desde el zip exportado en Colab.")
             self.objetivos[clave] = ModeloObjetivo(
                 clave, modelo, columnas, canonicas,
                     crear_explicador(modelo, columnas), archivo_modelo)
         self._importancia_global()
-        self._error_tipico()
 
     def _matriz(self, obj: ModeloObjetivo, filas: list[dict]) -> pd.DataFrame:
         """Filas canónicas -> DataFrame con los nombres y el orden del modelo."""
@@ -244,8 +275,7 @@ class ServicioML:
     def _importancia_global(self):
         """|SHAP| medio por variable en una muestra de entrenamiento.
 
-        Sirve para dos cosas: ordenar el selector y medir la "cobertura"
-        de información que aporta el usuario.
+        Ordena el selector de variables según su relevancia para el modelo.
         """
         muestra = self.train.iloc[::6]  # ~150 días repartidos en el periodo
         self.importancia = {}
@@ -255,34 +285,6 @@ class ServicioML:
             _, S = obj.explicador.explicar(X.astype(float))
             imp = np.abs(S).mean(axis=0)
             self.importancia[clave] = dict(zip(obj.canonicas, imp.tolist()))
-
-    def _error_tipico(self):
-        """Calcula métricas de validación/prueba y calibra un margen P95 en validación."""
-        self.mae_prueba, self.rmse_prueba = {}, {}
-        self.metricas_validacion, self.margen_p95_validacion = {}, {}
-        for clave, obj in self.objetivos.items():
-            X_val = self.val[obj.canonicas].copy()
-            X_val.columns = obj.columnas
-            y_val = self.val[f"y_{clave}"].to_numpy()
-            pred_val = obj.modelo.predict(X_val.astype(float))
-            errores = np.abs(pred_val - y_val)
-            if not len(errores):
-                raise ValueError(f"No hay datos de validación para calibrar el error de {clave}.")
-            self.metricas_validacion[clave] = {
-                "mae": float(mean_absolute_error(y_val, pred_val)),
-                "rmse": float(np.sqrt(mean_squared_error(y_val, pred_val))),
-                "r2": float(r2_score(y_val, pred_val)),
-                "muestras": len(y_val),
-            }
-            orden = min(len(errores), math.ceil((len(errores) + 1) * 0.95))
-            self.margen_p95_validacion[clave] = float(np.sort(errores)[orden - 1])
-
-            X_test = self.test[obj.canonicas].copy()
-            X_test.columns = obj.columnas
-            y_test = self.test[f"y_{clave}"].to_numpy()
-            pred_test = obj.modelo.predict(X_test.astype(float))
-            self.mae_prueba[clave] = float(mean_absolute_error(y_test, pred_test))
-            self.rmse_prueba[clave] = float(np.sqrt(mean_squared_error(y_test, pred_test)))
 
     @property
     def listo(self) -> bool:
@@ -306,6 +308,7 @@ class ServicioML:
                 "id": v, **{k: meta[k] for k in ("etiqueta", "nombre_largo", "unidad",
                                                  "descripcion", "umbral_seguro",
                                                  "fuente_umbral", "grupo",
+                                                 "max_deslizador",
                                                  "min_valido", "max_valido")},
                 "tiene_previo": v in TIENE_PREVIO,
                 **{f"simple_{k}": cat.SENCILLO[v][k] for k in ("nombre", "icono", "que_es")},
@@ -384,15 +387,21 @@ class ServicioML:
     def predecir(self, payload) -> dict:
         if not self.listo:
             raise ModelosNoDisponibles(self.error_carga or "Modelos no cargados.")
-        t0 = time.perf_counter()
         actual, previo, avisos = self.validar(payload)
         completo, estimadas = self.imputar(actual)
 
         # La simulación es agnóstica al tiempo: se evalúa el mismo estado del
         # aire en las 84 combinaciones mes × día de la semana y se promedia.
         # Como SHAP es aditivo, el promedio de las explicaciones explica el
-        # promedio de las predicciones (la verificación se hace abajo).
-        filas = [fila_desde_lecturas(completo, previo, m, d) for m in MESES for d in DIAS]
+                # promedio de las predicciones.
+        # Escenario C: el clima de hoy y de mañana sale del pronóstico de Open-Meteo;
+        # sin conexión se usa el promedio histórico de cada mes.
+        clima = self.clima_hoy_y_manana() if self.usa_meteo else None
+        filas = []
+        for m in MESES:
+            hoy, manana = (clima["hoy"], clima["manana"]) if clima and clima["disponible"] else \
+                          (self.clima_mes[m], self.clima_mes[m]) if clima else (None, None)
+            filas += [fila_desde_lecturas(completo, previo, m, d, manana, hoy) for d in DIAS]
 
         fuera = [cat.VARIABLES[v]["etiqueta"] for v, x in actual.items()
                  if x > self.stats[v]["max"]]
@@ -404,42 +413,30 @@ class ServicioML:
                           + ", ".join(fuera)
                           + ". La predicción puede ser menos confiable fuera del rango de entrenamiento.")
 
-        predicciones, explicaciones, cobertura = {}, {}, {}
+        
+        # Valor de cada variable de clima de mañana que se muestra en la explicación
+        valores_clima = ({c: float(np.mean([f[c] for f in filas])) for c in COLS_METEO}
+                         if self.usa_meteo else None)
+
+        predicciones, explicaciones = {}, {}
         for clave, obj in self.objetivos.items():
             X = self._matriz(obj, filas)
             pred = float(np.mean(obj.modelo.predict(X)))
-            base, S = obj.explicador.explicar(X)
+            _, S = obj.explicador.explicar(X)
             phi = S.mean(axis=0)
-            error_aditivo = abs(base + phi.sum() - pred)
 
-            explicaciones[clave] = self._explicacion(obj, clave, pred, base, phi, completo,
-                                                     actual, previo, estimadas, fuera,
-                                                     error_aditivo)
+            explicaciones[clave] = self._explicacion(
+                obj, clave, pred, phi, completo, estimadas, valores_clima)
             n_ica = nivel_ica(clave, pred)
-            margen_p95 = self.margen_p95_validacion[clave]
             predicciones[clave] = {
                 "valor": round(pred, 2),
-                "error_tipico": round(self.mae_prueba[clave], 2),
-                "rmse_prueba": round(self.rmse_prueba[clave], 2),
-                "margen_p95": round(margen_p95, 2),
-                "intervalo_p95": {
-                    "inferior": round(max(0.0, pred - margen_p95), 2),
-                    "superior": round(pred + margen_p95, 2),
-                    "nivel_nominal": 95,
-                    "referencia": "errores absolutos en el conjunto de validación cronológico",
-                },
-                "valor_base": round(base, 2),
-                "nivel": n_ica["id"], "nivel_etiqueta": n_ica["etiqueta"],
-                "supera_p90": bool(pred > self.p90[clave]),
-                "p90": round(self.p90[clave], 2),
-                "umbral_oms": cat.VARIABLES[clave]["umbral_seguro"],
+                "nivel": n_ica["id"],
             }
-            cobertura[clave] = self._cobertura(obj, clave, actual, previo)
 
         alerta = self._alerta(predicciones, actual)
-        cob_media = float(np.mean(list(cobertura.values())))
         return {
             "ok": True,
+            "clima": self._clima_publico(clima),
             "entrada": {
                 "ingresadas": [{"variable": v, "etiqueta": cat.VARIABLES[v]["etiqueta"],
                                 "valor": x, "valor_previo": previo.get(v),
@@ -455,97 +452,81 @@ class ServicioML:
                     "porcentaje": round(len(actual) / len(VARIABLES_BASE) * 100, 1),
                 },
             },
-            "cobertura": {
-                "porcentaje": round(cob_media * 100, 1),
-                "por_objetivo": {k: round(c * 100, 1) for k, c in cobertura.items()},
-                "nivel": "alta" if cob_media >= .75 else "media" if cob_media >= .4 else "baja",
-                "puntos": max(1, min(5, math.ceil(cob_media * 5))),
-            },
             "predicciones": predicciones,
             "alerta": alerta,
             "recomendaciones": self._recomendaciones(alerta["nivel"]),
             "explicacion": explicaciones,
             "avisos": avisos,
-            "tecnico": {
-                "explicador": {k: o.explicador.nombre for k, o in self.objetivos.items()},
-                "filas_calendario": len(filas),
-                "imputacion": "iterativa" if self.imputador is not None else "mediana",
-                "latencia_ms": round((time.perf_counter() - t0) * 1000, 1),
-            },
         }
 
-    def _explicacion(self, obj, clave, pred, base, phi, completo, actual, previo,
-                     estimadas, fuera, error_aditivo) -> dict:
-        etq_obj = cat.OBJETIVOS[clave]["etiqueta"]
-        detalle, por_var = [], {}
+    
+    def _explicacion(self, obj, clave, pred, phi, completo, estimadas, valores_clima=None) -> dict:
+        por_var = {}
         for col_can, aporte in zip(obj.canonicas, phi):
             var = variable_de(col_can)
-            transf = col_can.rsplit("_", 1)[1] if var != "calendario" else col_can
-            if var == "calendario":
-                origen = "calendario"
-            elif var in estimadas:
-                origen = "estimada"
-            elif transf in ("lag2", "ma3", "delta") and var not in previo:
-                origen = "supuesta"   # derivada asumiendo persistencia
-            else:
-                origen = "ingresada"
-            detalle.append({"columna": col_can, "variable": var, "transformacion": transf,
-                            "origen": origen, "aporte": round(float(aporte), 4)})
             por_var[var] = por_var.get(var, 0.0) + float(aporte)
 
         contribs = []
         for v in VARIABLES_BASE:
-            meta, st = cat.VARIABLES[v], self.stats[v]
+            meta = cat.VARIABLES[v]
             contribs.append({
-                "variable": v, "etiqueta": meta["etiqueta"], "nombre_largo": meta["nombre_largo"],
-                "grupo": meta["grupo"], "unidad": meta["unidad"],
-                "valor": round(completo[v], 4), "valor_previo": previo.get(v),
+                "variable": v, "etiqueta": meta["etiqueta"], "unidad": meta["unidad"],
+                "valor": round(completo[v], 4),
                 "origen": "estimada" if v in estimadas else "ingresada",
-                "mediana": st["mediana"], "umbral_seguro": meta["umbral_seguro"],
-                "fuente_umbral": meta["fuente_umbral"],
                 "aporte": round(por_var.get(v, 0.0), 4),
-            })
-        cal = por_var.get("calendario", 0.0)
-        total_abs = sum(abs(c["aporte"]) for c in contribs) + abs(cal) or 1.0
-        for c in contribs:
-            c["porcentaje"] = round(abs(c["aporte"]) / total_abs * 100, 1)
-        contribs.sort(key=lambda c: -abs(c["aporte"]))
+                        })
 
-        grupos = {}
-        for c in contribs:
-            grupos[c["grupo"]] = grupos.get(c["grupo"], 0.0) + c["aporte"]
-        grupos["Calendario"] = cal
+        for g, meta in cat.CLIMA.items():
+            if g in por_var and valores_clima:
+                contribs.append({
+                    "variable": g, "etiqueta": meta["etiqueta"], "unidad": meta["unidad"],
+                    "valor": round(valores_clima[meta["columna"]], 4),
+                    "origen": "clima", "aporte": round(por_var[g], 4),
+                })
 
         return {
-            "objetivo": etq_obj,
-            "valor_base": round(base, 3), "prediccion": round(pred, 3),
-            "contribuciones": contribs,
-            "calendario": {"aporte": round(cal, 4),
-                           "porcentaje": round(abs(cal) / total_abs * 100, 1)},
-            "grupos": [{"grupo": g, "aporte": round(a, 4)} for g, a in grupos.items()],
-            "detalle": sorted(detalle, key=lambda d: -abs(d["aporte"])),
-            "narrativa": construir_narrativa(etq_obj, pred, base, contribs, cal, fuera),
-            "simple": explicacion_simple(contribs, pred, base, self.stats, cat.SENCILLO),
-            "verificacion_aditiva": {
-                "base_mas_aportes": round(base + float(np.sum(phi)), 4),
-                "prediccion": round(pred, 4), "error": float(f"{error_aditivo:.2e}"),
-                "ok": bool(error_aditivo < 1e-3),
-            },
+            "simple": explicacion_simple(contribs, pred, self.stats, cat.SENCILLO),
         }
 
-    def _cobertura(self, obj, clave, actual, previo) -> float:
-        """Fracción de la importancia global que proviene de datos reales del usuario."""
-        imp = self.importancia[clave]
-        total = sum(val for c, val in imp.items() if variable_de(c) != "calendario") or 1.0
-        aportada = 0.0
-        for c, val in imp.items():
-            var = variable_de(c)
-            if var == "calendario" or var not in actual:
-                continue
-            transf = c.rsplit("_", 1)[1]
-            if transf == "lag1" or var in previo:
-                aportada += val
-        return aportada / total
+    # ---- 7. Clima de hoy y de mañana (escenario C) -------------------------
+    def clima_hoy_y_manana(self) -> dict:
+        """Pronóstico del tiempo de hoy y mañana. Se guarda 1 hora en memoria (la interfaz
+        recalcula con cada cambio de los deslizadores); si falla, se reintenta a los 10 minutos."""
+        ahora = time.monotonic()
+        if self._cache_meteo and ahora < self._cache_meteo[0]:
+            return self._cache_meteo[1]
+        resultado = {"disponible": False}
+        if self.meteo_en_linea:
+            try:
+                hoy, manana, fecha = descargar_hoy_y_manana(*self.ubicacion)
+                mes = int(fecha[5:7])
+                for c in COLS_METEO:          # p. ej., capa límite no disponible en el pronóstico
+                    if np.isnan(hoy[c]):
+                        hoy[c] = self.clima_mes[mes][c]
+                    if np.isnan(manana[c]):
+                        manana[c] = self.clima_mes[mes][c]
+                resultado = {"disponible": True, "hoy": hoy, "manana": manana, "fecha": fecha}
+            except Exception as e:  # noqa: BLE001 - sin internet o servicio caído
+                log.warning("No se pudo descargar el pronóstico del clima: %s", e)
+        vigencia = 3600 if resultado["disponible"] else 600
+        self._cache_meteo = (ahora + vigencia, resultado)
+        return resultado
+
+    @staticmethod
+    def _clima_publico(clima: dict | None) -> dict | None:
+        """Resumen del clima de mañana para la interfaz."""
+        if clima is None:
+            return None
+        if not clima["disponible"]:
+            return {"disponible": False,
+                    "fuente": "Sin conexión con el pronóstico del clima: se usó el clima típico de cada mes."}
+        m = clima["manana"]
+        return {
+            "disponible": True, "fecha": clima["fecha"], "fuente": "Pronóstico del clima de Open-Meteo",
+            "resumen": [{"id": g, "nombre": cat.CLIMA[g]["etiqueta"], "icono": cat.SENCILLO[g]["icono"],
+                         "valor": round(m[cat.CLIMA[g]["columna"]], 1), "unidad": cat.CLIMA[g]["unidad"]}
+                        for g in ("lluvia", "viento", "temperatura", "nubes")],
+        }
 
     def _alerta(self, predicciones: dict, actual: dict) -> dict:
         """Semáforo = el peor entre (a) el pronóstico y (b) tus lecturas actuales de PM.
@@ -569,7 +550,8 @@ class ServicioML:
             motivo = (f"Determinado por tu lectura actual de {etq} ({fmt(valor)} µg/m³), "
                       f"categoría ICA «{nivel['categoria_ica']}»; el pronóstico es menor, "
                       "pero el aire de ahora ya merece esta precaución.")
-        criticos = [cat.OBJETIVOS[k]["etiqueta"] for k, p in predicciones.items() if p["supera_p90"]]
+        criticos = [cat.OBJETIVOS[k]["etiqueta"] for k, p in predicciones.items()
+                    if p["valor"] > self.p90[k]]
         return {
             "nivel": nivel["id"], "orden": nivel["orden"], "etiqueta": nivel["etiqueta"],
             "categoria_ica": nivel["categoria_ica"], "color": nivel["color"],
@@ -589,29 +571,6 @@ class ServicioML:
         return [{**a, "estado": recs[a["id"]][0], "texto": recs[a["id"]][1],
                  "corto": cortas[a["id"]]} for a in cat.ACTIVIDADES]
 
-    # ---- 7. Benchmark -----------------------------------------------------
-    def benchmark(self) -> dict:
-        ruta = self.dir_modelos / "benchmark_modelos.json"
-        calculado = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None
-        return {"calculado": calculado, "tesis": cat.RESULTADOS_TESIS,
-                "modelo_en_uso": {k: type(o.modelo).__name__ for k, o in self.objetivos.items()},
-                "metricas_validacion": getattr(self, "metricas_validacion", {})}
-
-    def estado(self) -> dict:
-        return {
-            "listo": self.listo, "error": self.error_carga,
-            "modelos": {k: {"archivo": o.archivo, "tipo": type(o.modelo).__name__,
-                            "explicador": o.explicador.nombre, "variables": len(o.columnas),
-                            "metricas_validacion": getattr(self, "metricas_validacion", {}).get(k)}
-                        for k, o in self.objetivos.items()},
-            "imputacion": self.metodo_imputacion,
-            "p90": self.p90,
-            "mae_prueba": getattr(self, "mae_prueba", {}),
-            "rmse_prueba": getattr(self, "rmse_prueba", {}),
-        }
-
-
-# ---------------------------------------------------------------------------
 # Singleton perezoso y seguro para hilos
 # ---------------------------------------------------------------------------
 _servicio: ServicioML | None = None
@@ -625,7 +584,9 @@ def obtener_servicio() -> ServicioML:
             if _servicio is None:
                 from django.conf import settings
                 _servicio = ServicioML(settings.AIRE_DIR_MODELOS, settings.AIRE_RUTA_CSV,
-                                       getattr(settings, "AIRE_IMPUTACION", "iterativa"))
+                                       getattr(settings, "AIRE_IMPUTACION", "iterativa"),
+                                       getattr(settings, "AIRE_RUTA_METEO", None),
+                                       getattr(settings, "AIRE_METEO_EN_LINEA", True))
     return _servicio
 
 

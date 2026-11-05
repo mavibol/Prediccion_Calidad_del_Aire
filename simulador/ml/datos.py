@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .catalogo import VARIABLES
+from .meteo import COLS_METEO
 
 VARIABLES_BASE = list(VARIABLES.keys())
 CONTAMINANTES = ["pm2_5", "pm10", "carbon_monoxide", "nitrogen_dioxide",
@@ -32,6 +33,16 @@ def columnas_escenario_a() -> list[str]:
         cols += [f"{v}_ma3", f"{v}_delta"]
     cols += ["mes", "dia_semana"]
     return cols
+
+def columnas_escenario_c() -> list[str]:
+    """Las 51 variables del escenario C: A + meteorología de mañana (t) + meteorología de hoy (t-1)."""
+    return columnas_escenario_a() + COLS_METEO + [f"{c}_lag1" for c in COLS_METEO]
+
+
+def cargar_meteo(ruta_csv: str | Path) -> pd.DataFrame:
+    """Meteorología diaria exportada por el notebook (meteorologia_diaria.csv), indexada por fecha."""
+    me = pd.read_csv(ruta_csv, parse_dates=["date"]).sort_values("date").set_index("date")
+    return me[[c for c in COLS_METEO if c in me.columns]]
 
 
 def cargar_y_limpiar(ruta_csv: str | Path) -> pd.DataFrame:
@@ -55,7 +66,9 @@ def cargar_y_limpiar(ruta_csv: str | Path) -> pd.DataFrame:
     return df.set_index("date")
 
 
-def construir_features(df: pd.DataFrame) -> pd.DataFrame:
+
+def construir_features(df: pd.DataFrame, meteo: pd.DataFrame | None = None) -> pd.DataFrame:    
+    
     """Matriz de 21 variables + objetivos (pm2_5, pm10 del día t).
 
     Supuestos (confirmar contra el notebook):
@@ -76,6 +89,12 @@ def construir_features(df: pd.DataFrame) -> pd.DataFrame:
         out[f"{v}_delta"] = df[v].shift(1) - df[v].shift(2)
     out["mes"] = df.index.month
     out["dia_semana"] = df.index.dayofweek
+    if meteo is not None:
+        # Celdas 2.1 y 2.2 del Capítulo 2: unión por fecha (solo días de calidad del aire) y rezago
+        m = meteo.reindex(df.index).interpolate(method="linear").bfill().ffill()
+        for c in m.columns:
+            out[c] = m[c]                       # meteorología del día pronosticado (t)
+            out[f"{c}_lag1"] = m[c].shift(1)    # meteorología del día anterior (t-1)
     out["y_pm2_5"] = df["pm2_5"]
     out["y_pm10"] = df["pm10"]
     return out.dropna()
@@ -89,7 +108,9 @@ def particion_cronologica(mat: pd.DataFrame, n_val: int = 194, n_test: int = 194
             mat.iloc[n_train + n_val:])
 
 
-def fila_desde_lecturas(actual: dict, previo: dict, mes: int, dia: int) -> dict:
+
+def fila_desde_lecturas(actual: dict, previo: dict, mes: int, dia: int, meteo_manana: dict | None = None, meteo_hoy: dict | None = None) -> dict:    
+    
     """Traduce lecturas "instantáneas" a las 21 variables del modelo.
 
     `actual[v]` es la lectura más reciente de la variable v  -> v_lag1
@@ -113,4 +134,9 @@ def fila_desde_lecturas(actual: dict, previo: dict, mes: int, dia: int) -> dict:
         fila[f"{v}_delta"] = a - p
     fila["mes"] = mes
     fila["dia_semana"] = dia
+    # Escenario C: el tiempo de mañana entra tal cual y el de hoy como rezago de un día
+    for c, x in (meteo_manana or {}).items():
+        fila[c] = x
+    for c, x in (meteo_hoy or {}).items():
+        fila[f"{c}_lag1"] = x
     return fila

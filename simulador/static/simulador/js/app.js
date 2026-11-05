@@ -5,14 +5,13 @@
 
      1. Django incrusta el catálogo de variables en la página (json_script).
      2. El usuario agrega datos e introduce sus valores.
-     3. Cada movimiento programa un cálculo (espera 250 ms a que se detenga).
-     4. calcular() envía los pares [variable : valor] con fetch() a /api/predecir/.
+     3. Los controles actualizan sus lecturas, pero no recalculan el pronóstico.
+     4. Al pulsar «Predecir», calcular() envía los pares [variable : valor].
      5. El servidor imputa lo que falta, predice y calcula SHAP.
-     6. Se repinta: banner de estado, escala, recomendaciones y
-        atribuciones TreeSHAP con su dirección y magnitud.
+     6. Se repinta: pronóstico, escala, recomendaciones y factores
+        explicados en lenguaje cotidiano.
 
    Regla de diseño: el público ve estados, iconos y frases cortas.
-   Las cifras quedan detrás del interruptor «Modo técnico».
    ===================================================================== */
 (function () {
   "use strict";
@@ -22,7 +21,7 @@
      ----------------------------------------------------------------- */
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-  const { fmt, fmtSigno } = window.Graficos;
+  const { fmt } = window.Graficos;
   const icono = window.Iconos.svg;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -47,21 +46,121 @@
   const PORID = Object.fromEntries(CATALOGO.map((v) => [v.id, v]));
   const CSRF = $('meta[name="csrf-token"]').content;
   const COLOR_NIVEL = ["#0ca30c", "#f2b005", "#ec835a", "#d03b3b", "#7d3c98"];
-  const CARAS = [["checkCircle", "Limpio"], ["dotCircle", "Aceptable"], ["triangleAlert", "Regular"], ["shieldAlert", "Contaminado"], ["triangleAlert", "Peligroso"]];
 
   const estado = {
     filas: new Map(),      // id de variable a <li>
     resultado: null,       // última respuesta del servidor
     peticion: null,        // AbortController de la petición en curso
-    temporizador: null,
-    objetivoTec: "pm2_5",  // pestaña del modo técnico
-    benchmark: null,
-    fichaModelo: null,
+    cambiosPendientes: false,
     escena: null,
   };
+  const NIVELES = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"];
+  const TITULOS_NIVEL = ["Aire limpio", "Aire aceptable", "Aire regular", "Aire contaminado", "Aire peligroso"];
+  const ILUSTRACIONES = {
+    cielo: `<svg viewBox="0 0 160 110" focusable="false"><g fill="none" stroke="#f4b83f" stroke-width="4" stroke-linecap="round"><path d="M112 7v8M88 17l5 7m38-7-5 7M79 35h8m50 0h8"/></g><circle cx="112" cy="36" r="20" fill="#ffc94f" stroke="#f4b83f" stroke-width="3"/><path d="M31 83c-14 0-23-8-23-20 0-11 9-20 21-20 5-15 19-24 34-21 11 2 20 9 23 19 16-3 30 9 30 24 0 11-9 18-22 18Z" fill="#fff" stroke="#4987bf" stroke-width="4" stroke-linejoin="round"/></svg>`,
+    deporte: `<div class="w-16 h-16 mx-auto my-2 flex items-center justify-center">
+    <svg viewBox="0 0 100 100" class="w-10 h-10" fill="none" stroke="#359ea5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Cabeza -->
+      <circle cx="58" cy="22" r="7" />
+      <!-- Viento / Brisa detrás -->
+      <path d="M22 45H32M18 53H36M24 61H30" stroke="#82d0c8" stroke-width="4" />
+      <!-- Brazo trasero flexionado -->
+      <path d="M48 38L38 42L36 52" />
+      <!-- Torso inclinado hacia adelante -->
+      <path d="M54 30L46 54" stroke-width="7" />
+      <!-- Brazo delantero flexionado hacia arriba -->
+      <path d="M52 35L64 42L72 37" />
+      <!-- Pierna trasera en extensión completa -->
+      <path d="M46 54L34 66L23 62" />
+      <!-- Pierna delantera en zancada -->
+      <path d="M46 54L59 66L53 82" />
+    </svg>
+  </div>`,
+    sensibles: `<div class="w-16 h-16 mx-auto my-2 flex items-center justify-center">
+    <svg viewBox="0 0 100 100" class="w-10 h-10" fill="none" stroke="#8c62c2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Corazón en tono coral suave -->
+      <path d="M50 78C50 78 20 60 20 38C20 26 29 18 40 18C46 18 50 22 50 22C50 22 54 18 60 18C71 18 80 26 80 38C80 60 50 78 50 78Z" />
+      <!-- Hoja / Brote de aire puro en el centro -->
+      <path d="M50 56V40M50 46C44 44 42 38 44 34C48 34 50 38 50 46ZM50 42C56 40 58 34 56 30C52 30 50 34 50 42Z" stroke-width="4" />
+    </svg>
+  </div>`,
+
+  hogar: `<div class="w-16 h-16 mx-auto my-2 flex items-center justify-center">
+    <svg viewBox="0 0 100 100" class="w-10 h-10" fill="none" stroke="#4c8db8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Marco de la ventana -->
+      <rect x="25" y="20" width="50" height="60" rx="4" />
+      <!-- Divisiones de la ventana (cruz) -->
+      <line x1="50" y1="20" x2="50" y2="80" />
+      <line x1="25" y1="50" x2="75" y2="50" />
+      <!-- Brisas de viento exterior -->
+      <path d="M15 35c5-2 10 0 10 0M12 45c5-2 8 0 8 0" stroke="#82b8dc" stroke-width="4" />
+    </svg>
+  </div>`,
+ };
+  const ACCIONES = [
+    { id: "running", titulo: "Deporte", ilustracion: "deporte", estados: { si: "Muy recomendado", precaucion: "Con moderación", no: "Mejor evitar" }, textos: { si: "Ideal para entrenar al aire libre", precaucion: "Modera la intensidad", no: "Entrena en interiores" } },
+    { id: "sensibles", titulo: "Grupos sensibles", ilustracion: "sensibles", estados: { si: "Sin riesgo", precaucion: "Precaución", no: "Protegerse" }, textos: { si: "Pueden salir con tranquilidad", precaucion: "Toma precauciones", no: "Evita exposición prolongada" } },
+    { id: "ventilacion", titulo: "Hogar", ilustracion: "hogar", estados: { si: "Ventilar", precaucion: "Con cuidado", no: "No ventilar" }, textos: { si: "Buen momento para renovar el aire", precaucion: "Ventila por poco tiempo", no: "Mantén las ventanas cerradas" } },
+  ];
+  function pintarIlustraciones() {
+    $$("[data-ilustracion]").forEach((contenedor) => {
+      const svg = ILUSTRACIONES[contenedor.dataset.ilustracion];
+      if (!svg) throw new Error(`Ilustración desconocida: ${contenedor.dataset.ilustracion}`);
+      contenedor.innerHTML = svg;
+    });
+  }
+
+  function pintarEscala(orden) {
+    const etiquetas = NIVELES.map((texto, i) =>
+      `<span class="escala__etiqueta ${i === orden ? "activo" : ""}">${texto}</span>`).join("");
+    const tramos = COLOR_NIVEL.map((color, i) =>
+      `<span class="escala__tramo ${i === orden ? "activo" : ""}" style="--nivel-color:${color}"></span>`).join("");
+    const indicador = orden === null ? "" :
+      `<span class="escala__indicador" style="--nivel-color:${COLOR_NIVEL[orden]};--posicion:${(orden + 0.5) * 20}%" aria-hidden="true"></span>`;
+    const etiqueta = orden === null
+      ? "Escala de calidad; se resaltará al calcular el pronóstico"
+      : `Nivel pronosticado: ${NIVELES[orden]}`;
+    $("#escala").innerHTML = `<div class="escala__pista" role="img" aria-label="${etiqueta}">${tramos}${indicador}</div>
+      <div class="escala__etiquetas" aria-hidden="true">${etiquetas}</div>`;
+  }
+
+  function pintarRecomendaciones(lista) {
+    const recomendaciones = new Map((lista || []).map((r) => [r.id, r]));
+    const faltante = ACCIONES.find((accion) => !recomendaciones.has(accion.id));
+    if (lista && faltante) {
+      mostrarAviso(`No recibimos la recomendación de ${faltante.titulo.toLowerCase()}.`);
+      return;
+    }
+    $("#recomendaciones").innerHTML = ACCIONES.map((accion) => {
+      const r = recomendaciones.get(accion.id);
+      const titulo = r ? esc(r.etiqueta) : accion.titulo;
+      if (!r) {
+        return `<article class="rec-card rec-card--pendiente">
+          <div class="rec-card__visual rec-card__visual--${accion.ilustracion}"><span>${ILUSTRACIONES[accion.ilustracion]}</span></div>
+          <div class="rec-card__contenido"><h4>${titulo}</h4>
+            <strong class="rec-card__estado">Pendiente</strong>
+            <p>Agrega datos para ver la recomendación.</p></div>
+        </article>`;
+      }
+      const estadoRecomendacion = accion.estados[r.estado];
+      if (!estadoRecomendacion) {
+        mostrarAviso(`No reconocemos el estado de la recomendación de ${accion.titulo.toLowerCase()}.`);
+        return `<article class="rec-card rec-card--pendiente">
+          <div class="rec-card__visual rec-card__visual--${accion.ilustracion}"><span>${ILUSTRACIONES[accion.ilustracion]}</span></div>
+          <div class="rec-card__contenido"><h4>${titulo}</h4><strong class="rec-card__estado">Sin recomendación</strong></div>
+        </article>`;
+      }
+      return `<article class="rec-card rec-card--${esc(r.estado)}">
+        <div class="rec-card__visual rec-card__visual--${accion.ilustracion}"><span>${ILUSTRACIONES[accion.ilustracion]}</span></div>
+        <div class="rec-card__contenido"><h4>${titulo}</h4>
+          <strong class="rec-card__estado">${estadoRecomendacion}</strong>
+          <p class="rec-card__accion">${accion.textos[r.estado]}</p></div>
+      </article>`;
+    }).join("");
+  }
 
   /* -----------------------------------------------------------------
-     PASO 2 · Navegación, menú y modo técnico
+     PASO 2 · Navegación y menú
      ----------------------------------------------------------------- */
   const app = $("#app");
   if (memoria.leer("aire.colapsado") === "1") app.classList.add("colapsado");
@@ -79,19 +178,9 @@
   $("#velo").addEventListener("click", () => menuMovil(false));
   document.addEventListener("keydown", (e) => e.key === "Escape" && menuMovil(false));
 
-  // Modo técnico: muestra cifras y gráficos SHAP para evaluadores
-  const chkTec = $("#chk-tecnico");
-  chkTec.checked = memoria.leer("aire.tecnico") === "1";
-  document.body.classList.toggle("modo-tecnico", chkTec.checked);
-  chkTec.addEventListener("change", () => {
-    document.body.classList.toggle("modo-tecnico", chkTec.checked);
-    memoria.guardar("aire.tecnico", chkTec.checked ? "1" : "0");
-    repintarTodo();
-  });
-
   function mostrarVista() {
     const pedida = (location.hash || "#simulador").slice(1);
-    const vista = ["simulador", "explicabilidad", "modelos"].includes(pedida) ? pedida : "simulador";
+    const vista = ["simulador", "explicabilidad"].includes(pedida) ? pedida : "simulador";
     $$(".vista").forEach((s) => (s.hidden = s.id !== "vista-" + vista));
     $$(".nav-item").forEach((a) => {
       a.classList.toggle("activo", a.dataset.vista === vista);
@@ -103,7 +192,6 @@
     document.title = `${sec.dataset.titulo} · Aire Claro`;
     menuMovil(false);
     if (vista === "explicabilidad") pintarPorque();
-    if (vista === "modelos") cargarBenchmark();
     window.scrollTo({ top: 0 });
   }
   window.addEventListener("hashchange", mostrarVista);
@@ -118,6 +206,45 @@
      ----------------------------------------------------------------- */
   const selector = $("#selector-variable");
   const lista = $("#lista-variables");
+  const btnPredecir = $("#btn-predecir");
+  const estadoPrediccion = $("#estado-prediccion");
+
+  function formularioValido() {
+    if (!estado.filas.size) return false;
+    for (const [id, li] of estado.filas) {
+      const entrada = $(".dato__lectura", li);
+      const valor = Number(entrada.value);
+      if (!entrada.value.trim() || !entrada.validity.valid ||
+          !Number.isFinite(valor) || valor < PORID[id].min_valido || valor > PORID[id].max_valido) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function actualizarAccionPrediccion() {
+    btnPredecir.disabled = !formularioValido() || Boolean(estado.peticion);
+    if (!estado.filas.size) {
+      estadoPrediccion.textContent = "Agrega datos y pulsa Predecir para ver el resultado.";
+    } else if (estado.peticion) {
+      estadoPrediccion.textContent = "Calculando el pronóstico…";
+    } else if (!formularioValido()) {
+      estadoPrediccion.textContent = "Revisa los valores marcados antes de predecir.";
+    } else if (estado.cambiosPendientes) {
+      estadoPrediccion.textContent = "Hay cambios sin predecir. Pulsa el botón para actualizar el resultado.";
+    } else {
+      estadoPrediccion.textContent = "El pronóstico está actualizado.";
+    }
+  }
+
+  function marcarCambiosPendientes() {
+    if (estado.peticion) {
+      estado.peticion.abort();
+      estado.peticion = null;
+    }
+    estado.cambiosPendientes = true;
+    actualizarAccionPrediccion();
+  }
 
   function poblarSelector() {
     const libres = CATALOGO.filter((v) => !estado.filas.has(v.id));
@@ -140,6 +267,8 @@
     if (!v || estado.filas.has(id)) return;
     const d = decimales(v);
     const inicial = valor ?? v.mediana;
+    const maximoSlider = Math.max(v.max_deslizador ?? v.max, inicial, 1);
+    const pasoSlider = 1 / (10 ** d);
     const li = document.createElement("li");
     li.className = "dato";
     li.dataset.variable = id;
@@ -152,59 +281,83 @@
       </div>
       <p class="dato__que" hidden>${esc(v.simple_que_es)}</p>
       <div class="dato__control">
-<<<<<<< HEAD
-        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
-               aria-describedby="dato-rango-${id} dato-error-${id}" value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
-        <small class="dato__rango" id="dato-rango-${id}">Rango de entrada: ${fmt(v.min_valido, d)}–${fmt(v.max_valido, d)} ${esc(v.unidad)}. Límite amplio, independiente del histórico.</small>
-=======
-        <input type="text" class="campo dato__num" inputmode="decimal" aria-label="Valor exacto de ${esc(v.simple_nombre)}"
-               aria-describedby="dato-error-${id}"
-               value="${fmt(inicial, d).replace(/\./g, "")}" autocomplete="off">
->>>>>>> rama_maira
+        <div class="dato__medicion">
+          <div class="dato__deslizador">
+            <input type="range" class="dato__num" min="${v.min_valido}" max="${maximoSlider}" step="${pasoSlider}"
+                   aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
+                   aria-describedby="dato-error-${id}" value="${inicial}">
+            <div class="dato__extremos" aria-hidden="true"><span>${fmt(v.min_valido, d)}</span><span>${fmt(maximoSlider, d)}</span></div>
+          </div>
+          <label class="dato__lectura-contenedor">
+            <span class="sr-only">Valor de ${esc(v.etiqueta)}</span>
+            <input type="number" class="dato__lectura" min="${v.min_valido}" max="${v.max_valido}" step="${pasoSlider}"
+                   aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
+                   aria-describedby="dato-error-${id}" value="${inicial}">
+            <small class="dato__unidad">${esc(v.unidad)}</small>
+          </label>
+        </div>
         <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
-      <div class="dato__estado"><i></i><span></span></div>`;
+      <div class="dato__estado"><i></i><span class="dato__estado-texto"></span><span class="dato__fuera" role="status" aria-live="polite" hidden>Fuera del rango de entrenamiento</span></div>`;
 
     const num = $(".dato__num", li);
+    num.id = `dato-${id}`;
+    const lectura = $(".dato__lectura", li);
+    lectura.id = `dato-lectura-${id}`;
+    const error = $(`#dato-error-${id}`, li);
+    const mostrarError = (mensaje) => {
+      error.textContent = mensaje;
+      error.hidden = !mensaje;
+      lectura.setAttribute("aria-invalid", String(Boolean(mensaje)));
+      num.setAttribute("aria-invalid", String(Boolean(mensaje)));
+    };
+    const actualizarDeslizador = () => {
+      const progreso = (Number(num.value) - Number(num.min)) / (Number(num.max) - Number(num.min)) * 100;
+      num.style.setProperty("--progreso", `${progreso}%`);
+    };
     const pintarEstado = (x) => {
       const [txt, color] = estadoDe(v, x);
-      $(".dato__estado span", li).textContent = txt;
+      $(".dato__estado-texto", li).textContent = txt;
       $(".dato__estado i", li).style.background = color;
+      $(".dato__fuera", li).hidden = !(x > v.max);
     };
-    pintarEstado(inicial);
+    const sincronizarCampo = () => {
+      const texto = lectura.value.trim();
+      const x = texto === "" ? NaN : Number(texto);
+      if (!Number.isFinite(x)) {
+        mostrarError("Escribe un valor numérico.");
+        return false;
+      }
+      if (x < v.min_valido || x > v.max_valido) {
+        mostrarError(`Ingresa un valor entre ${fmt(v.min_valido, d)} y ${fmt(v.max_valido, d)}.`);
+        return false;
+      }
+      if (lectura.validity.stepMismatch) {
+        mostrarError(`Usa incrementos de ${fmt(pasoSlider, d)}.`);
+        return false;
+      }
+      mostrarError("");
+      num.value = String(Math.min(Number(num.max), Math.max(Number(num.min), x)));
+      actualizarDeslizador();
+      pintarEstado(x);
+      return true;
+    };
+    actualizarDeslizador();
+    lectura.value = String(Number(num.value));
+    pintarEstado(Number(lectura.value));
 
     num.addEventListener("input", () => {
-      const x = aNumero(num.value);
-<<<<<<< HEAD
-      const error = x === null || !Number.isFinite(x)
-        ? "Escribe un número válido."
-        : x < v.min_valido || x > v.max_valido
-          ? `El valor debe estar entre ${fmt(v.min_valido, d)} y ${fmt(v.max_valido, d)} ${v.unidad}.`
-          : "";
-      const malo = Boolean(error);
-      num.toggleAttribute("aria-invalid", malo);
-      num.style.borderColor = malo ? "var(--n3)" : "";
-=======
-      const error = x === null
-        ? ""
-        : !Number.isFinite(x)
-          ? "Escribe un número válido."
-          : x < 0
-            ? "El valor no puede ser negativo."
-            : x > CONFIG.maximo_valor_entrada
-              ? `El valor no puede superar ${fmt(CONFIG.maximo_valor_entrada, 0)} ${v.unidad}.`
-              : "";
-      const malo = Boolean(error);
-      num.toggleAttribute("aria-invalid", malo);
-      num.style.borderColor = malo ? "var(--ensucia)" : "";
->>>>>>> rama_maira
-      const errorEl = $(`#dato-error-${id}`, li);
-      errorEl.textContent = error;
-      errorEl.hidden = !malo;
-      if (malo) return;
-      if (x === null) return;
+      const x = Number(num.value);
+      lectura.value = String(x);
+      mostrarError("");
+      actualizarDeslizador();
       pintarEstado(x);
-      programarCalculo(500);
+      marcarCambiosPendientes();
+    });
+    lectura.addEventListener("input", () => {
+      const valido = sincronizarCampo();
+      marcarCambiosPendientes();
+      if (!valido) return;
     });
     $(".dato__info", li).addEventListener("click", (e) => {
       const p = $(".dato__que", li);
@@ -216,7 +369,7 @@
     lista.appendChild(li);
     estado.filas.set(id, li);
     poblarSelector();
-    programarCalculo(0);
+    marcarCambiosPendientes();
   }
 
   function quitarVariable(id) {
@@ -226,19 +379,41 @@
     li.classList.add("saliendo");
     setTimeout(() => li.remove(), 200);
     poblarSelector();
-    if (estado.filas.size) programarCalculo(0); else reiniciarResultados();
+    if (estado.filas.size) marcarCambiosPendientes(); else reiniciarResultados();
   }
 
   function reiniciarResultados() {
     if (estado.peticion) estado.peticion.abort();
+    estado.peticion = null;
     estado.resultado = null;
-    $("#resultado").hidden = true;
-    $("#bienvenida").hidden = false;
+    estado.cambiosPendientes = false;
+    const veredicto = $("#veredicto");
+    delete veredicto.dataset.clave;
+    veredicto.innerHTML = `<span class="veredicto__ilustracion">${ILUSTRACIONES.cielo}</span>
+      <span class="veredicto__estado">
+        <span class="veredicto__titulo">Tu pronóstico aparecerá aquí</span>
+      </span>
+      <div class="veredicto__resumen">
+        <span class="veredicto__medicion">
+          <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
+          <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+        </span>
+        <span class="veredicto__frase">Agrega datos para conocer el pronóstico.</span>
+      </div>`;
+    if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
+    estado.escena.actualizar(null);
+    pintarEscala(null);
+    pintarRecomendaciones(null);
+    $("#alerta-local").hidden = true;
+    $("#clima-manana").hidden = true;
     $("#mini-estado").classList.remove("visible");
     mostrarAviso("");
+    actualizarAccionPrediccion();
+    if (!$("#vista-explicabilidad").hidden) pintarPorque();
   }
 
   $("#btn-agregar").addEventListener("click", () => selector.value && agregarVariable(selector.value));
+  btnPredecir.addEventListener("click", calcular);
   $("#btn-limpiar").addEventListener("click", () => {
     [...estado.filas.values()].forEach((li) => li.remove());
     estado.filas.clear();
@@ -250,6 +425,7 @@
     [...estado.filas.values()].forEach((li) => li.remove());
     estado.filas.clear();
     CATALOGO.forEach((v) => agregarVariable(v.id, v[b.dataset.escenario]));
+    actualizarAccionPrediccion();
   }));
 
   /* -----------------------------------------------------------------
@@ -259,28 +435,25 @@
     const variables = [];
     for (const [id, li] of estado.filas) {
       const meta = PORID[id];
-      const x = aNumero($(".dato__num", li).value);
-<<<<<<< HEAD
-      if (x === null || !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
-=======
-      if (x === null || !Number.isFinite(x) || x < 0 || x > CONFIG.maximo_valor_entrada) return null;
->>>>>>> rama_maira
+      const entrada = $(".dato__lectura", li);
+      const x = Number(entrada.value);
+      if (!entrada.value.trim() || !entrada.validity.valid ||
+          !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
       variables.push({ variable: id, valor: x });
     }
     return variables.length ? { variables } : null;
   }
 
-  function programarCalculo(espera) {
-    clearTimeout(estado.temporizador);
-    estado.temporizador = setTimeout(calcular, espera);
-  }
-
   async function calcular() {
     const payload = leerFormulario();
-    if (!payload) return;
+    if (!payload) {
+      actualizarAccionPrediccion();
+      return;
+    }
     if (estado.peticion) estado.peticion.abort(); // una respuesta vieja nunca pisa a una nueva
     const control = new AbortController();
     estado.peticion = control;
+    actualizarAccionPrediccion();
     try {
       const r = await fetch(CONFIG.api.predecir, {
         method: "POST",
@@ -294,12 +467,16 @@
       if (!r.ok || !datos.ok) { mostrarAviso(datos.error || "No pudimos calcular. Intenta de nuevo."); return; }
       mostrarAviso("");
       estado.resultado = datos;
+      estado.cambiosPendientes = false;
       pintarResultado(datos);
       if (!$("#vista-explicabilidad").hidden) pintarPorque();
     } catch (e) {
       if (e.name !== "AbortError") mostrarAviso("Sin conexión con el servidor. ¿Está encendido Django?");
     } finally {
-      if (estado.peticion === control) estado.peticion = null;
+      if (estado.peticion === control) {
+        estado.peticion = null;
+        actualizarAccionPrediccion();
+      }
     }
   }
 
@@ -308,110 +485,176 @@
      ----------------------------------------------------------------- */
   function pintarResultado(d) {
     const a = d.alerta;
-    $("#bienvenida").hidden = true;
-    $("#resultado").hidden = false;
 
-    // 5.1 El banner cambia de tono según el nivel
+    // 5.1 El fondo y la lectura principal cambian según el nivel pronosticado
     if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
     estado.escena.actualizar(a.orden);
     const ver = $("#veredicto");
-    const clave = a.titulo + a.cara;
+    const titulo = TITULOS_NIVEL[a.orden] || a.titulo;
+    const clave = a.orden + a.cara;
+    const pronostico = d.predicciones.pm2_5;
+    const mensajeNivel = [
+      "¡Excelente para actividades al aire libre!",
+      "Buenas condiciones para salir.",
+      "Modera el esfuerzo al aire libre.",
+      "Evita el ejercicio al aire libre.",
+      "Permanece en interiores.",
+    ][a.orden];
     if (ver.dataset.clave !== clave) { // solo «rebota» la cara si cambió el nivel
       ver.dataset.clave = clave;
-      ver.innerHTML = `<span class="veredicto__cara" aria-hidden="true">${icono(a.cara, "icon")}</span>
-        <span><span class="veredicto__titulo">${esc(a.titulo)}</span><br><span class="veredicto__frase">${esc(a.frase)}</span></span>`;
+      ver.innerHTML = `<span class="veredicto__ilustracion">${ILUSTRACIONES.cielo}</span>
+        <span class="veredicto__estado">
+          <span class="veredicto__titulo">${esc(titulo)}</span>
+        </span>
+        <div class="veredicto__resumen">
+          <span class="veredicto__medicion">
+            <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
+            <strong class="veredicto__valor"><span class="veredicto__numero">${fmt(pronostico.valor, 1)}</span> <span>µg/m³</span></strong>
+          </span>
+          <span class="veredicto__frase"></span>
+        </div>`;
     }
+    ver.querySelector(".veredicto__titulo").textContent = titulo;
+    ver.querySelector(".veredicto__numero").textContent = fmt(pronostico.valor, 1);
+    const frase = ver.querySelector(".veredicto__frase");
+    frase.textContent = `${mensajeNivel}${a.contaminante === "pm10" ? " La categoría también considera PM₁₀." : ""}`;
+    frase.setAttribute("aria-label", `${frase.textContent} ${a.frase}`);
 
-    // 5.2 Escala de cinco estados (color + icono + palabra)
-    $("#escala").innerHTML = CARAS.map(([cara, txt], i) => `
-      <div class="escalon ${i === a.orden ? "activo" : ""}" style="color:${COLOR_NIVEL[i]}" ${i === a.orden ? 'aria-current="true"' : ""}>
-        <span class="escalon__cara" aria-hidden="true">${icono(cara, "icon")}</span>
-        <span class="escalon__txt" style="color:var(--tinta)">${txt}</span>
-        <span class="escalon__barra" style="background:${COLOR_NIVEL[i]}"></span>
-      </div>`).join("");
+    // 5.2 Barra de cinco estados con el nivel pronosticado destacado
+    pintarEscala(a.orden);
 
     $("#alerta-local").hidden = !a.dia_critico_local;
     $("#alerta-local").innerHTML = `${icono("triangleAlert", "icon")} Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.`;
 
-    // 5.3 Completitud observada + sugerencia del dato más útil que falta
-    const faltante = CATALOGO.find((v) => !estado.filas.has(v.id));
-    const completas = d.entrada.completitud;
-    $("#precision").innerHTML = `<h3>Datos ingresados</h3>
-      <div class="completitud__valor">${completas.ingresadas} de ${completas.total} variables ingresadas <b>(${fmt(completas.porcentaje, 0)} %)</b></div>
-      <div class="completitud__barra" role="meter" aria-label="Completitud de datos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completas.porcentaje}">
-        <span style="width:${completas.porcentaje}%"></span></div>
-      <span class="suave">Cobertura de importancia del modelo: ${fmt(d.cobertura.porcentaje, 1)} %; es una medida ponderada, no el porcentaje de variables ingresadas.</span>
-      ${faltante && completas.ingresadas < completas.total ? `<button type="button" class="sugerencia" data-id="${faltante.id}">${icono("plus", "icon")} ${icono(faltante.simple_icono, "icon")} Agregar ${esc(faltante.etiqueta)} — ${esc(faltante.nombre_largo)}</button>` : ""}`;
-    const sug = $(".sugerencia", $("#precision"));
-    if (sug) sug.addEventListener("click", () => agregarVariable(sug.dataset.id));
+    // Clima de mañana usado por el modelo (escenario C)
+    pintarClima(d.clima);
+    // Consejos para hoy
+    pintarRecomendaciones(d.recomendaciones);
 
-    // 5.4 Resumen breve de las atribuciones TreeSHAP
-    const s = d.explicacion[a.contaminante].simple;
-    const fila = (f, favorable) => f ? `<div class="porque-mini__fila ${favorable ? "porque-mini__fila--favorable" : "porque-mini__fila--desfavorable"}">
-        <span><strong>${esc(f.nombre)}</strong><small class="factor__comun">${favorable ? "Aporte favorable" : "Aporte desfavorable"} · ${fmtSigno(f.aporte, 1)} µg/m³</small></span></div>` : "";
-    $("#porque-mini").innerHTML = `<h3>¿Por qué?</h3>${fila(s.desfavorables[0], false)}${fila(s.favorables[0], true)}
-      ${!s.desfavorables.length && !s.favorables.length ? `<p class="suave">No hay aportes individuales relevantes.</p>` : ""}
-      <span class="ver-mas">Ver la explicación ${icono("arrowRight", "icon")}</span>`;
-
-    // 5.5 Consejos para hoy (máximo seis palabras cada uno)
-    const SELLO = { si: "checkCircle", precaucion: "triangleAlert", no: "x" };
-    $("#recomendaciones").innerHTML = d.recomendaciones.map((r) => `
-      <div class="rec rec--${r.estado}" title="${esc(r.texto)}">
-        <span class="rec__sello" aria-label="${r.estado === "si" ? "Sí" : r.estado === "no" ? "No" : "Con cuidado"}">${icono(SELLO[r.estado], "icon")}</span>
-        <div class="rec__ico" aria-hidden="true">${icono(r.icono, "icon")}</div>
-        <div class="rec__tit">${esc(r.etiqueta)}</div>
-        <div class="rec__txt">${esc(r.corto)}</div>
-      </div>`).join("");
-
-    // 5.6 Estado compacto para móvil
+    // Estado compacto para móvil
     const mini = $("#mini-estado");
     mini.style.background = COLOR_NIVEL[a.orden];
     mini.style.color = a.tinta;
     mini.innerHTML = `${icono(a.cara, "icon")} ${esc(a.titulo)}`;
     mini.classList.add("visible");
+  }
 
-    // 5.7 Modo técnico: las cifras reales
-    const p = d.predicciones;
-    $("#tec-simulador").innerHTML = `<h3>Detalle técnico</h3><div class="tec-cifras">
-      <div>PM2.5 pronosticado<b>${fmt(p.pm2_5.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm2_5.error_tipico, 2)} · rango empírico P95 validación ${fmt(p.pm2_5.intervalo_p95.inferior, 2)}–${fmt(p.pm2_5.intervalo_p95.superior, 2)} µg/m³</div>
-      <div>PM10 pronosticado<b>${fmt(p.pm10.valor, 2)} µg/m³</b>MAE prueba ${fmt(p.pm10.error_tipico, 2)} · rango empírico P95 validación ${fmt(p.pm10.intervalo_p95.inferior, 2)}–${fmt(p.pm10.intervalo_p95.superior, 2)} µg/m³</div>
-      <div>Cobertura de importancia<b>${fmt(d.cobertura.porcentaje, 1)} %</b>PM2.5 ${fmt(d.cobertura.por_objetivo.pm2_5, 0)} % · PM10 ${fmt(d.cobertura.por_objetivo.pm10, 0)} %</div>
-      <div>Categoría ICA<b>${esc(a.categoria_ica)}</b>${esc(a.motivo)}</div></div>
-      <p class="suave">Estimadas: ${d.entrada.estimadas.map((e) => `${esc(e.etiqueta)} ≈ ${fmt(e.valor, 2)}`).join(" · ") || "ninguna"} ·
-      ${esc(d.tecnico.explicador[a.contaminante])} · ${fmt(d.tecnico.latencia_ms, 0)} ms</p>`;
-    if (estado.benchmark && !$("#vista-modelos").hidden) pintarConfiable();
+  function pintarClima(c) {
+    const caja = $("#clima-manana");
+    caja.hidden = !c;
+    if (!c) return;
+    if (!c.disponible) {
+      caja.innerHTML = `<p class="clima-manana__titulo">${icono("cloud", "icon")} Clima de mañana</p>
+        <p class="clima-manana__fuente">${esc(c.fuente)}</p>`;
+      return;
+    }
+    caja.innerHTML = `<p class="clima-manana__titulo">Clima de mañana</p>
+      <div class="clima-manana__datos">${c.resumen.map((x) =>
+        `<span class="clima-manana__dato">${icono(x.icono, "icon")} ${esc(x.nombre)}: <strong>${fmt(x.valor, 1)} ${esc(x.unidad)}</strong></span>`).join("")}
+      </div>
+      <p class="clima-manana__fuente">${esc(c.fuente)}.</p>`;
   }
 
   /* -----------------------------------------------------------------
-     PASO 6 · ¿Por qué? — dirección y magnitud de los aportes TreeSHAP
+     PASO 6 · ¿Por qué? — factores explicados en lenguaje cotidiano
      ----------------------------------------------------------------- */
-  function tarjetaFactor(f, maxAporte) {
-    const favorable = f.aporte < 0;
-    const color = favorable ? "var(--aporte-favorable)" : "var(--aporte-desfavorable)";
-    const ancho = Math.max(2, Math.abs(f.aporte) / maxAporte * 100);
-    const d = f.valor < 5 ? 2 : 1;
-    return `<button type="button" class="factor ${f.origen === "estimada" ? "factor--estimada" : ""}" style="--color:${color}"
-              aria-label="${esc(f.nombre)}: ${favorable ? "aporte favorable, disminuye el valor predicho" : "aporte desfavorable, incrementa el valor predicho"} en ${fmtSigno(f.aporte, 1)} microgramos por metro cúbico. Toca para saber más.">
-      <span class="factor__giro">
-        <span class="factor__cara">
-          <span class="factor__fila">
-            <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
-            <span class="factor__texto"><span class="factor__nombre">${esc(f.nombre)}</span><small class="factor__comun">${esc(f.nombre_comun)}</small></span>
-          </span>
-          <span class="aporte__valor">${fmtSigno(f.aporte, 1)} µg/m³</span>
-          <span class="aporte__pista" aria-hidden="true"><span style="width:${ancho}%"></span></span>
-          <span class="aporte__direccion">${favorable ? "Disminuye el índice predicho (Aporte favorable)" : "Incrementa el nivel de contaminación (Aporte desfavorable)"}</span>
-          ${f.origen === "estimada" ? `<span class="factor__pista">No lo diste: lo calculamos por ti</span>` : ""}
-        </span>
-        <span class="factor__dorso">
-          <b>${icono(f.icono, "icon")} ${esc(f.nombre)}</b>
-          <small class="factor__comun">${esc(f.nombre_comun)}</small>
-          <span>${esc(f.que_es)}</span>
-          <span class="suave">Valor usado: ${fmt(f.valor, d)} ${esc(f.unidad === "adim." || f.unidad === "índice" ? "" : f.unidad)}</span>
-          <span class="aporte__valor">${fmtSigno(f.aporte, 1)} µg/m³</span>
-        </span>
-      </span></button>`;
+  const EXPLICACIONES_FACTORES = {
+    pm2_5: "Partículas microscópicas producidas por quema de combustibles, incendios y motores diésel. Por ser tan finas, ingresan directo a los pulmones.",
+    sulphur_dioxide: "Dióxido de azufre generado por la combustión en industrias y transporte de carga pesada.",
+    ozone: "Gas que se produce a nivel del suelo cuando la radiación solar y las altas temperaturas reaccionan con los gases de los vehículos.",
+    pm10: "Partículas de polvo del suelo, cenizas y material suspendido levantado por el viento y obras viales.",
+    carbon_monoxide: "Monóxido de carbono emitido por vehículos, especialmente en situaciones de congestión o tráfico lento.",
+    lluvia: "La lluvia de mañana lava el aire: las gotas arrastran las partículas hasta el suelo.",
+    viento: "El viento dispersa la contaminación y la saca del valle; con poco viento el humo se acumula.",
+    temperatura: "Noches frías y días calientes indican un aire quieto que atrapa la contaminación cerca del suelo.",
+    capa_mezcla: "Altura hasta donde se mezcla el aire. Si es baja, la contaminación queda atrapada como bajo una tapa.",
+    humedad: "La humedad alta favorece la formación de partículas microscópicas que irritan los pulmones.",
+    };
+
+  function estadoSalud(variable, valor) {
+    const umbral = PORID[variable]?.umbral_seguro;
+    if (!Number.isFinite(Number(valor)) || !Number.isFinite(Number(umbral)) || Number(umbral) <= 0) {
+      return { etiqueta: "Dato ambiental", clase: "factor__salud--neutral" };
+    }
+
+    const proporcion = Number(valor) / Number(umbral);
+    if (proporcion <= 0.25) return { etiqueta: "Muy bajo", clase: "factor__salud--muy-bajo" };
+    if (proporcion <= 1) return { etiqueta: "Bueno / Saludable", clase: "factor__salud--bueno" };
+    if (proporcion <= 1.5) return { etiqueta: "Aceptable", clase: "factor__salud--aceptable" };
+    return { etiqueta: "Conviene tener cuidado", clase: "factor__salud--cuidado" };
   }
+
+  function tarjetaFactor(f, maxAporte, favorable, esPrincipal) {
+    const peso = Math.min(100, Math.max(15, Math.abs(f.aporte) / maxAporte * 100));
+    const unidad = f.unidad === "adim." || f.unidad === "índice" ? "" : ` ${esc(f.unidad)}`;
+    const decimalesValor = f.valor < 5 ? 2 : 1;
+    const salud = f.tipo === "clima"
+      ? { etiqueta: "Clima de mañana", clase: "factor__salud--neutral" }
+      : estadoSalud(f.variable, f.valor);
+    const accion = favorable ? "limpieza" : "concentración";
+    const impacto = esPrincipal
+      ? `Aporte principal a la ${accion}`
+      : `${peso >= 40 ? "Aporte moderado" : "Aporte leve"} a la ${accion}`;
+    const explicacion = EXPLICACIONES_FACTORES[f.variable] || f.que_es;
+    const idAyuda = `factor-ayuda-${f.variable}`;
+    return `<article class="factor ${favorable ? "factor--favorable" : "factor--desfavorable"} ${f.origen === "estimada" ? "factor--estimada" : ""}"
+              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${salud.etiqueta}. ${impacto}.">
+      <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
+      <div class="factor__encabezado">
+        <h3 class="factor__nombre">${esc(f.nombre_comun)}</h3>
+        <span class="factor__variable">
+          ${esc(f.etiqueta)}
+          ${explicacion ? `<span class="factor__ayuda-wrap">
+            <button class="factor__ayuda" type="button" aria-label="Qué significa ${esc(f.etiqueta)}" aria-expanded="false" aria-describedby="${idAyuda}">ℹ</button>
+            <span class="factor__tooltip" id="${idAyuda}" role="tooltip">${esc(explicacion)}</span>
+          </span>` : ""}
+        </span>
+      </div>
+      <div class="factor__medicion">
+        <strong class="factor__valor">${fmt(f.valor, decimalesValor)}${unidad}</strong>
+        <span class="factor__salud ${salud.clase}">${salud.etiqueta}</span>
+      </div>
+      <div class="aporte__pista" role="progressbar" aria-label="Peso relativo del factor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(peso)}">
+        <span style="width:${peso}%"></span>
+      </div>
+      <p class="factor__impacto">${impacto}</p>
+      ${f.origen === "estimada" ? `<span class="factor__estimada">Dato estimado</span>` : "" }
+    </article>`;
+  }
+
+  const dialogoAyuda = $("#xai-dialogo");
+  const botonAbrirAyuda = $("#xai-abrir-ayuda");
+  function cerrarTooltips(excepto = null) {
+    $$(".factor__ayuda[aria-expanded='true']", $("#col-factores"))
+      .filter((boton) => boton !== excepto)
+      .forEach((boton) => boton.setAttribute("aria-expanded", "false"));
+  }
+  botonAbrirAyuda.addEventListener("click", () => dialogoAyuda.showModal());
+  $("#xai-cerrar-ayuda").addEventListener("click", () => dialogoAyuda.close());
+  $("#xai-listo-ayuda").addEventListener("click", () => dialogoAyuda.close());
+  dialogoAyuda.addEventListener("click", (evento) => {
+    if (evento.target === dialogoAyuda) dialogoAyuda.close();
+  });
+  dialogoAyuda.addEventListener("close", () => botonAbrirAyuda.focus());
+
+  $("#col-factores").addEventListener("click", (evento) => {
+    const boton = evento.target.closest(".factor__ayuda");
+    if (!boton) {
+      cerrarTooltips();
+      return;
+    }
+    const abrir = boton.getAttribute("aria-expanded") !== "true";
+    cerrarTooltips(boton);
+    boton.setAttribute("aria-expanded", String(abrir));
+  });
+  $("#col-factores").addEventListener("keydown", (evento) => {
+    if (evento.key !== "Escape") return;
+    const boton = evento.target.closest(".factor__ayuda");
+    if (boton && boton.getAttribute("aria-expanded") === "true") {
+      boton.setAttribute("aria-expanded", "false");
+      boton.focus();
+    }
+  });
 
   function pintarPorque() {
     const d = estado.resultado;
@@ -419,226 +662,41 @@
     $("#xai-contenido").hidden = !d;
     if (!d) return;
     const a = d.alerta, s = d.explicacion[a.contaminante].simple;
-
-    const e = d.explicacion[a.contaminante];
-    const relevantes = [...s.favorables, ...s.desfavorables];
+    const relevantes = [
+      ...s.favorables.map((f) => ({ ...f, ayuda: true })),
+      ...s.desfavorables.map((f) => ({ ...f, ayuda: false })),
+    ].sort((x, y) => Math.abs(y.aporte) - Math.abs(x.aporte));
     const maxAporte = Math.max(...relevantes.map((f) => Math.abs(f.aporte)), 0.01);
-    $("#xai-frase").textContent = s.frase;
-    $("#xai-resumen-base").innerHTML = `Valor base E[f(X)]: <b>${fmt(e.valor_base, 2)} µg/m³</b>
-      <span aria-hidden="true">+</span> aportes TreeSHAP = valor predicho <b>${fmt(e.prediccion, 2)} µg/m³</b>`;
+    const objetivo = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
+    const saludables = a.orden === 0;
+    const factorPrincipal = relevantes[0];
+    const influencia = factorPrincipal
+      ? `Lo que más pesa es ${factorPrincipal.tipo === "clima" ? "el clima de mañana: " : ""}${factorPrincipal.nombre_comun}, junto con los demás datos del aire.`
+      : "El resultado combina los datos ingresados y los estimados automáticamente.";
+    const estadoHumano = saludables
+      ? "se mantiene en niveles saludables"
+      : a.orden === 1
+        ? "se mantiene en un nivel aceptable para la mayoría"
+        : a.orden === 2
+          ? "requiere precaución para las personas sensibles"
+          : "puede afectar la salud; conviene limitar las actividades al aire libre";
+    $("#xai-frase").textContent = `El pronóstico de ${objetivo} (${fmt(s.prediccion, 1)} µg/m³) ${estadoHumano}. ${influencia}`;
+    $("#col-factores").innerHTML = relevantes.length
+      ? relevantes.map((f, i) => tarjetaFactor(f, maxAporte, f.ayuda, i === 0)).join("")
+      : `<div class="columna__vacia">No hay factores relevantes para mostrar.</div>`;
+    $("#xai-nota").textContent = [
+      s.hay_estimadas ? "Los datos con la etiqueta «Estimado automáticamente» se completaron porque no fueron ingresados." : "",
+      "La explicación resume patrones aprendidos por el modelo; no demuestra una causa directa.",
+    ].filter(Boolean).join(" ");
 
-    $("#col-favorables").innerHTML = s.favorables.length ? s.favorables.map((f) => tarjetaFactor(f, maxAporte)).join("")
-      : `<div class="columna__vacia">Sin aportes favorables relevantes</div>`;
-    $("#col-desfavorables").innerHTML = s.desfavorables.length ? s.desfavorables.map((f) => tarjetaFactor(f, maxAporte)).join("")
-      : `<div class="columna__vacia">Sin aportes desfavorables relevantes</div>`;
-    $$(".factor").forEach((b) => b.addEventListener("click", () => b.classList.toggle("girada")));
-    $("#xai-nota").textContent = "Las barras comparan la magnitud absoluta de los aportes mostrados." +
-      (s.hay_estimadas ? " Las tarjetas punteadas son datos que no diste: los calculamos por ti." : "");
-
-    // Modo técnico: SHAP por variable para PM2.5 o PM10
-    $$("#xai-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.objetivo === estado.objetivoTec)));
-    const eTec = d.explicacion[estado.objetivoTec];
-    const items = eTec.detalle.map((c) => ({
-      columna: c.columna, aporte: c.aporte, origen: c.origen,
-    }));
-    if (document.body.classList.contains("modo-tecnico"))
-      window.Graficos.cascadaSHAP($("#grafico-cascada"), eTec.valor_base, eTec.prediccion, items);
-    const v = eTec.verificacion_aditiva;
-    $("#xai-ecuacion").innerHTML = `Base E[f(X)] ${fmt(eTec.valor_base, 3)} + suma de aportes ${fmtSigno(v.base_mas_aportes - eTec.valor_base, 3)}
-      = <b>${fmt(v.base_mas_aportes, 3)}</b> · predicción ${fmt(v.prediccion, 3)} µg/m³ ${icono(v.ok ? "checkCircle" : "triangleAlert", "icon")} ${v.ok ? "aditividad TreeSHAP verificada" : "revisar aditividad TreeSHAP"}`;
-  }
-  $$("#xai-tabs button").forEach((b) => b.addEventListener("click", () => { estado.objetivoTec = b.dataset.objetivo; pintarPorque(); }));
-
-  /* -----------------------------------------------------------------
-     PASO 7 · ¿Es confiable? — tiro al blanco de métodos
-     ----------------------------------------------------------------- */
-  const NOMBRE_MODELO = {
-    xgboost: "XGBoost", desplegado: "XGBoost", lightgbm: "LightGBM", random_forest: "Bosque aleatorio",
-    persistencia: "Repetir lo de ayer", media_movil: "Promedio de 3 días", media_historica: "Promedio de siempre",
-  };
-  const COLOR_MODELO = {
-    xgboost: "#2a78d6", desplegado: "#2a78d6", lightgbm: "#eb6834", random_forest: "#1baf7a",
-    persistencia: "#6f6d68", media_movil: "#a8a69e", media_historica: "#cfcdc5",
-  };
-
-  async function abrirFichaModelo() {
-    const dialogo = $("#ficha-modelo");
-    const contenido = $("#ficha-modelo-contenido");
-    dialogo.showModal();
-    $("#estado-modelo").setAttribute("aria-expanded", "true");
-    contenido.innerHTML = `<p class="suave">Cargando ficha técnica…</p>`;
-    try {
-      if (!estado.fichaModelo) {
-        const respuesta = await fetch(CONFIG.api.estado, { credentials: "same-origin" });
-        if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
-        estado.fichaModelo = await respuesta.json();
-        if (!estado.fichaModelo.ok) throw new Error("No se pudo obtener el estado de los modelos.");
-      }
-      const datos = estado.fichaModelo;
-      const nombreAlgoritmo = {
-        XGBRegressor: "XGBoost Regressor",
-        GradientBoostingRegressor: "Gradient Boosting Regressor",
-        RandomForestRegressor: "Random Forest Regressor",
-        LGBMRegressor: "LightGBM Regressor",
-      };
-      contenido.innerHTML = datos.listo
-        ? `<div class="ficha-modelo__rejilla">${Object.entries(datos.modelos).map(([clave, modelo]) => {
-          const metrica = modelo.metricas_validacion;
-          return `<article class="ficha-modelo__objetivo">
-            <h3>${clave === "pm2_5" ? "PM₂.₅" : "PM₁₀"}</h3>
-            <p><b>Algoritmo:</b> ${esc(nombreAlgoritmo[modelo.tipo] || modelo.tipo)}</p>
-            <p><b>Validación cronológica (n = ${metrica.muestras}):</b></p>
-            <ul>
-              <li>R² = ${fmt(metrica.r2, 3)}</li>
-              <li>RMSE = ${fmt(metrica.rmse, 2)} µg/m³</li>
-              <li>MAE = ${fmt(metrica.mae, 2)} µg/m³</li>
-            </ul>
-          </article>`;
-        }).join("")}</div>`
-        : `<p class="aviso">${esc(datos.error || "Los modelos no están disponibles.")}</p>`;
-    } catch (error) {
-      contenido.innerHTML = `<p class="aviso">No se pudo cargar la ficha técnica. ${esc(error.message)}</p>`;
-    }
-  }
-  $("#cerrar-ficha-modelo").addEventListener("click", () => $("#ficha-modelo").close());
-  $("#ficha-modelo").addEventListener("close", () => $("#estado-modelo").setAttribute("aria-expanded", "false"));
-
-  async function cargarBenchmark() {
-    if (estado.benchmark) return pintarConfiable();
-    try {
-      estado.benchmark = await (await fetch(CONFIG.api.benchmark, { credentials: "same-origin" })).json();
-      pintarConfiable();
-    } catch {
-      $("#bm-contenido").innerHTML = `<div class="aviso">No se pudo cargar la comparación.</div>`;
-    }
-  }
-
-  function pintarConfiable() {
-    const b = estado.benchmark;
-    if (!b) return;
-    const clave = estado.objetivoTec;
-    const calc = b.calculado && b.calculado.objetivos[clave];
-    let modelos, elegido, mejora, estab = null, limite = true;
-
-    if (calc) {
-      const hayDesplegado = calc.modelos.some((m) => m.desplegado && m.id === "desplegado");
-      const lista = calc.modelos.filter((m) => !(hayDesplegado && m.id === "xgboost"));
-      modelos = lista.map((m) => ({
-        id: m.id, nombre: NOMBRE_MODELO[m.id] || m.nombre, mae: m.prueba.mae,
-        elegido: !!m.desplegado, color: COLOR_MODELO[m.id] || "#999", fila: m,
-      }));
-      if (!modelos.some((m) => m.elegido)) modelos.find((m) => m.id === "xgboost").elegido = true;
-      elegido = modelos.find((m) => m.elegido);
-      mejora = elegido.fila.mejora_vs_persistencia;
-      const ensambles = lista.filter((m) => m.estabilidad && m.familia !== "Referencia ingenua")
-        .sort((x, y) => x.estabilidad.desv - y.estabilidad.desv);
-      if (elegido.fila.estabilidad) estab = ensambles.findIndex((m) => m.id === elegido.id) + 1;
-      limite = elegido.fila.prueba.mae_criticos != null;
-    } else {
-      // Sin benchmark calculado: se usan los resultados oficiales de la tesis
-      const t = b.tesis.prueba;
-      modelos = [
-        { id: "xgboost", nombre: "XGBoost", mae: t[1][clave].mae, elegido: true, color: COLOR_MODELO.xgboost },
-        { id: "persistencia", nombre: "Repetir lo de ayer", mae: t[0][clave].mae, elegido: false, color: COLOR_MODELO.persistencia },
-      ];
-      elegido = modelos[0];
-      mejora = b.tesis.mejora_vs_persistencia[clave];
-    }
-
-    const orden = [...modelos].sort((x, y) => x.mae - y.mae);
-    const tecTabla = calc ? `<div class="tarjeta tec" style="margin-top:22px">
-        <div class="segmentado" role="tablist" id="bm-tabs">
-          <button role="tab" type="button" data-objetivo="pm2_5" aria-selected="${clave === "pm2_5"}">PM2.5</button>
-          <button role="tab" type="button" data-objetivo="pm10" aria-selected="${clave === "pm10"}">PM10</button></div>
-        <table class="tabla"><thead><tr><th>Modelo</th><th class="num">MAE val.</th><th class="num">R² val.</th><th class="num">Puntaje</th>
-          <th class="num">MAE prueba</th><th class="num">RMSE prueba</th><th class="num">R² prueba</th><th class="num">MAE picos</th><th class="num">± bloques</th></tr></thead><tbody>
-        ${calc.modelos.map((m) => `<tr class="${m.desplegado ? "destacada" : ""}"><td>${esc(m.nombre)}</td>
-          <td class="num">${fmt(m.validacion.mae, 3)}</td><td class="num">${fmt(m.validacion.r2, 3)}</td>
-          <td class="num">${m.ranking ? m.ranking.total : "—"}</td>
-          <td class="num">${fmt(m.prueba.mae, 3)}</td><td class="num">${fmt(m.prueba.rmse, 3)}</td><td class="num">${fmt(m.prueba.r2, 3)}</td>
-          <td class="num">${m.prueba.mae_criticos != null ? fmt(m.prueba.mae_criticos, 3) : "—"}</td>
-          <td class="num">${m.estabilidad ? fmt(m.estabilidad.desv, 3) : "—"}</td></tr>`).join("")}
-        </tbody></table>
-        <p class="suave">${b.calculado.sustituto ? `${icono("triangleAlert", "icon")} Calculado con un sustituto de XGBoost (scikit-learn). ` : ""}Tesis (prueba): XGBoost MAE ${fmt(b.tesis.prueba[1][clave].mae, 3)} · R² ${fmt(b.tesis.prueba[1][clave].r2, 3)}.
-        El escenario B (mismo día) logra R² ${fmt(b.tesis.prueba[2][clave].r2, 3)}, pero describe el presente; el objetivo es anticipar.</p></div>` : "";
-
-    const d = estado.resultado;
-    const resumenActual = d ? (() => {
-      const comp = d.entrada.completitud;
-      const imputadas = d.entrada.estimadas.length;
-      const metodoImputacion = d.tecnico.imputacion === "iterativa"
-        ? "imputación iterativa ajustada con datos de entrenamiento"
-        : "mediana histórica calculada con datos de entrenamiento";
-      const prediccion = (etiqueta, p) => `<div class="incertidumbre__prediccion">
-        <b>${etiqueta}: ${fmt(p.valor, 2)} µg/m³</b>
-        <span>Rango predictivo empírico P95: ${fmt(p.intervalo_p95.inferior, 2)}–${fmt(p.intervalo_p95.superior, 2)} µg/m³</span>
-      </div>`;
-      return `<section class="tarjeta resumen-fiabilidad tec" aria-labelledby="resumen-fiabilidad-titulo">
-        <h2 id="resumen-fiabilidad-titulo">Predicción y calidad de los datos</h2>
-        <div class="incertidumbre__predicciones">
-          ${prediccion("PM₂.₅", d.predicciones.pm2_5)}${prediccion("PM₁₀", d.predicciones.pm10)}
-        </div>
-        <div class="incertidumbre__metricas">
-          ${Object.entries(d.predicciones).map(([id, p]) => {
-            const m = b.metricas_validacion[id];
-            return `<div><b>${id === "pm2_5" ? "PM₂.₅" : "PM₁₀"}</b>
-              <span>Validación: MAE ${fmt(m.mae, 2)} · RMSE ${fmt(m.rmse, 2)} µg/m³ · R² ${fmt(m.r2, 3)}</span>
-              <span>Prueba: MAE ${fmt(p.error_tipico, 2)} · RMSE ${fmt(p.rmse_prueba, 2)} µg/m³</span>
-            </div>`;
-          }).join("")}
-        </div>
-        <div class="completitud">
-          <div class="completitud__valor">Completitud de datos: <b>${comp.ingresadas} de ${comp.total} variables (${fmt(comp.porcentaje, 0)} %)</b></div>
-          <div class="completitud__barra" role="meter" aria-label="Completitud de datos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${comp.porcentaje}">
-            <span style="width:${comp.porcentaje}%"></span></div>
-        </div>
-        <p class="suave">${imputadas
-          ? `${imputadas} ${imputadas === 1 ? "variable imputada" : "variables imputadas"} mediante ${metodoImputacion}.`
-          : "No se imputaron variables: todos los datos disponibles fueron ingresados."}</p>
-        <p class="suave">Rango predictivo empírico nominal P95, calibrado con errores absolutos de validación cronológica. No es un intervalo de confianza de parámetros ni una cobertura garantizada; los errores pueden cambiar con el tiempo y las condiciones.</p>
-      </section>`;
-    })() : `<section class="tarjeta resumen-fiabilidad"><h2>Predicción y calidad de los datos</h2>
-      <p class="suave">Ingresa datos en el simulador para ver la predicción, su rango empírico y la completitud.</p></section>`;
-
-    $("#bm-contenido").innerHTML = `${resumenActual}
-      <div class="rejilla-conf">
-        <div class="tarjeta diana" id="diana"></div>
-        <div>
-          <p class="frase-grande">${icono("target", "icon")} Elegimos <b>${esc(elegido.nombre)}</b> porque es el que menos se equivoca.</p>
-          <p class="suave">Cada dardo es una forma distinta de adivinar el aire de mañana. El centro es el acierto perfecto: entre más cerca, mejor adivina.</p>
-          <ol class="podio-lista">${orden.map((m, i) => `<li class="${m.elegido ? "elegido" : ""}">
-            <span class="medalla" aria-label="Puesto ${i + 1}">${i + 1}</span>${esc(m.nombre)}${m.elegido ? ` ${icono("star", "icon")}` : ""}
-            <span class="pin" style="background:${m.color}" aria-hidden="true"></span></li>`).join("")}</ol>
-        </div>
-      </div>
-      <div class="insignias">
-        <div class="insignia"><span class="insignia__ico">${icono("target", "icon")}</span><b>Más certero</b>
-          <span>Falla ${fmt(mejora, 0)} % menos que «repetir lo de ayer».</span></div>
-        <div class="insignia"><span class="insignia__ico">${icono("ruler", "icon")}</span><b>Constante</b>
-          <span>${estab === 1 ? "Es el más parejo en las distintas épocas del año." : "Lo probamos en varias épocas del año y se mantuvo."}</span></div>
-        <div class="insignia"><span class="insignia__ico">${icono("bolt", "icon")}</span><b>Rápido y transparente</b>
-          <span>Responde al instante y te dice por qué.</span></div>
-        ${limite ? `<div class="insignia insignia--limite"><span class="insignia__ico">${icono("triangleAlert", "icon")}</span><b>Su límite</b>
-          <span>Le cuesta anticipar los días más contaminados.</span></div>` : ""}
-      </div>${tecTabla}`;
-
-    window.Graficos.diana($("#diana"), modelos);
-    $$("#bm-tabs button").forEach((bt) => bt.addEventListener("click", () => { estado.objetivoTec = bt.dataset.objetivo; pintarConfiable(); }));
   }
 
   /* -----------------------------------------------------------------
-     PASO 8 · Arranque
+     PASO 7 · Arranque
      ----------------------------------------------------------------- */
-  function repintarTodo() {
-    if (estado.resultado) { pintarResultado(estado.resultado); pintarPorque(); }
-    if (estado.benchmark && !$("#vista-modelos").hidden) pintarConfiable();
-  }
-  const pie = $("#estado-modelo");
-  $(".punto", pie).classList.add(CONFIG.listo ? "ok" : "error");
-  pie.addEventListener("click", abrirFichaModelo);
-  $("#mini-estado").addEventListener("click", () => $(".escena-tarjeta").scrollIntoView({ behavior: "smooth", block: "center" }));
-  $(".nav-item__txt", pie).textContent = CONFIG.listo ? "Modelo listo" : "Modelo no disponible";
   if (!CONFIG.listo) mostrarAviso("La interfaz está disponible, pero las predicciones no. " + (CONFIG.error_carga || ""));
+  estado.escena = window.Graficos.escena($("#escena"));
+  pintarIlustraciones();
   poblarSelector();
   mostrarVista();
 })();

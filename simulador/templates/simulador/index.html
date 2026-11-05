@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Aire Claro · ¿Cómo estará el aire?</title>
-  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
 </head>
 <body>
 <div class="app" id="app">
@@ -26,22 +26,9 @@
         <span class="nav-item__icono" data-icon="air" aria-hidden="true"></span><span class="nav-item__txt">Mi aire</span>
       </a>
       <a href="#explicabilidad" class="nav-item" data-vista="explicabilidad">
-        <span class="nav-item__icono" data-icon="search" aria-hidden="true"></span><span class="nav-item__txt">¿Por qué?</span>
-      </a>
-      <a href="#modelos" class="nav-item" data-vista="modelos">
-        <span class="nav-item__icono" data-icon="target" aria-hidden="true"></span><span class="nav-item__txt">¿Es confiable?</span>
+        <span class="nav-item__icono" data-icon="search" aria-hidden="true"></span><span class="nav-item__txt">Factores del Aire</span>
       </a>
     </nav>
-    <div class="sidebar__pie">
-      <label class="interruptor-tec" title="Muestra cifras y detalles para evaluadores">
-        <input type="checkbox" id="chk-tecnico">
-        <span class="interruptor-tec__pista" aria-hidden="true"></span>
-        <span class="nav-item__txt">Modo técnico</span>
-      </label>
-      <button class="sidebar__estado" id="estado-modelo" type="button" aria-haspopup="dialog" aria-controls="ficha-modelo" aria-expanded="false" aria-live="polite">
-        <span class="punto" aria-hidden="true"></span><span class="nav-item__txt">Cargando…</span>
-      </button>
-    </div>
   </aside>
   <div class="velo" id="velo" hidden></div>
 
@@ -68,6 +55,14 @@
 
         <div class="tarjeta panel-datos">
           <h2>Lo que sabes del aire hoy</h2>
+          <div class="ejemplos">
+            <span>¿Sin datos? Prueba un ejemplo:</span>
+            <div class="ejemplos__chips">
+              <button type="button" class="chip" data-escenario="p10"><span data-icon="sun" aria-hidden="true"></span> Día limpio</button>
+              <button type="button" class="chip" data-escenario="mediana"><span data-icon="dotCircle" aria-hidden="true"></span> Día normal</button>
+              <button type="button" class="chip" data-escenario="p90"><span data-icon="haze" aria-hidden="true"></span> Día cargado</button>
+            </div>
+          </div>
           <p class="suave">Agrega un dato y escribe su valor. Entre más datos, más preciso.</p>
 
           <div class="agregador">
@@ -78,115 +73,130 @@
 
           <ul class="lista-variables" id="lista-variables" aria-label="Datos agregados"></ul>
 
-          <div class="ejemplos">
-            <span>¿Sin datos? Prueba un ejemplo:</span>
-            <div class="ejemplos__chips">
-              <button type="button" class="chip" data-escenario="p10"><span data-icon="sun" aria-hidden="true"></span> Día limpio</button>
-              <button type="button" class="chip" data-escenario="mediana"><span data-icon="dotCircle" aria-hidden="true"></span> Día normal</button>
-              <button type="button" class="chip" data-escenario="p90"><span data-icon="haze" aria-hidden="true"></span> Día cargado</button>
-            </div>
+          <div class="accion-prediccion">
+            <button id="btn-predecir" type="button" class="btn btn--primario btn--predecir" aria-describedby="estado-prediccion" aria-controls="resultado" disabled>
+              <span data-icon="air" aria-hidden="true"></span> Predecir
+            </button>
+            <p class="accion-prediccion__ayuda" id="estado-prediccion" aria-live="polite">Agrega datos y pulsa Predecir para ver el resultado.</p>
           </div>
           <button id="btn-limpiar" type="button" class="btn btn--fantasma" hidden><span data-icon="rotateCcw" aria-hidden="true"></span> Empezar de nuevo</button>
         </div>
 
         <div class="panel-resultado" aria-live="polite">
-          <!-- Bienvenida: tres pasos -->
-          <div class="tarjeta bienvenida" id="bienvenida">
-            <div class="paso"><span class="paso__ico" data-icon="plus" aria-hidden="true"></span><b>Agrega un dato</b><span>Por ejemplo, el humo o el polvo.</span></div>
-            <div class="paso__flecha" data-icon="arrowRight" aria-hidden="true"></div>
-            <div class="paso"><span class="paso__ico" data-icon="ruler" aria-hidden="true"></span><b>Escribe el valor</b><span>Ingresa la cantidad que quieras.</span></div>
-            <div class="paso__flecha" data-icon="arrowRight" aria-hidden="true"></div>
-            <div class="paso"><span class="paso__ico" data-icon="eye" aria-hidden="true"></span><b>Mira el cielo</b><span>Cambia al instante.</span></div>
-          </div>
-
-          <div id="resultado" hidden>
+          <div id="resultado">
             <div class="tarjeta escena-tarjeta">
               <div class="escena" id="escena"></div>
-              <div class="veredicto" id="veredicto"></div>
-              <span class="escena__nota">Pronóstico para las próximas 24 horas</span>
+              <div class="veredicto" id="veredicto">
+                <span class="veredicto__ilustracion" data-ilustracion="cielo" aria-hidden="true"></span>
+                <span class="veredicto__estado">
+                  <span class="veredicto__titulo">Tu pronóstico aparecerá aquí</span>
+                </span>
+                <div class="veredicto__resumen">
+                  <span class="veredicto__medicion">
+                    <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
+                    <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+                  </span>
+                  <span class="veredicto__frase">Agrega datos para conocer el pronóstico.</span>
+                </div>
+              </div>
+              <span class="escena__nota"></span>
             </div>
 
-            <div class="escala" id="escala" aria-label="Escala de calidad del aire"></div>
+            <div class="escala" id="escala" aria-label="Escala de calidad del aire">
+              <div class="escala__pista" role="img" aria-label="Escala de calidad; se resaltará al calcular el pronóstico">
+                <span class="escala__tramo" style="--nivel-color:#0ca30c"></span>
+                <span class="escala__tramo" style="--nivel-color:#f2b005"></span>
+                <span class="escala__tramo" style="--nivel-color:#ec835a"></span>
+                <span class="escala__tramo" style="--nivel-color:#d03b3b"></span>
+                <span class="escala__tramo" style="--nivel-color:#7d3c98"></span>
+              </div>
+              <div class="escala__etiquetas" aria-hidden="true">
+                <span class="escala__etiqueta">Limpio</span>
+                <span class="escala__etiqueta">Aceptable</span>
+                <span class="escala__etiqueta">Regular</span>
+                <span class="escala__etiqueta">Contaminado</span>
+                <span class="escala__etiqueta">Peligroso</span>
+              </div>
+            </div>
             <div class="alerta-local" id="alerta-local" hidden></div>
-
-            <div class="fila-dos">
-              <div class="tarjeta precision" id="precision"></div>
-              <a class="tarjeta porque-mini" id="porque-mini" href="#explicabilidad"></a>
-            </div>
+            <div class="clima-manana" id="clima-manana" hidden></div>
 
             <div class="tarjeta">
-              <h3>Para hoy</h3>
-              <div class="recomendaciones" id="recomendaciones"></div>
+              <h3>Recomendaciones para tu día</h3>
+              <div class="recomendaciones" id="recomendaciones" aria-live="polite">
+                <article class="rec-card rec-card--pendiente">
+                  <div class="rec-card__visual rec-card__visual--deporte"><span data-ilustracion="deporte" aria-hidden="true"></span></div>
+                  <div class="rec-card__contenido"><h4>Deporte</h4><strong class="rec-card__estado">Pendiente</strong><p>Agrega datos para ver la recomendación.</p></div>
+                </article>
+                <article class="rec-card rec-card--pendiente">
+                  <div class="rec-card__visual rec-card__visual--sensibles"><span data-ilustracion="sensibles" aria-hidden="true"></span></div>
+                  <div class="rec-card__contenido"><h4>Grupos sensibles</h4><strong class="rec-card__estado">Pendiente</strong><p>Agrega datos para ver la recomendación.</p></div>
+                </article>
+                <article class="rec-card rec-card--pendiente">
+                  <div class="rec-card__visual rec-card__visual--hogar"><span data-ilustracion="hogar" aria-hidden="true"></span></div>
+                  <div class="rec-card__contenido"><h4>Hogar</h4><strong class="rec-card__estado">Pendiente</strong><p>Agrega datos para ver la recomendación.</p></div>
+                </article>
+              </div>
             </div>
 
-            <div class="tarjeta tec" id="tec-simulador"></div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- ---------- VISTA 2: ¿POR QUÉ? ---------- -->
-    <section class="vista" id="vista-explicabilidad" hidden data-titulo="¿Por qué?" data-sub="Cómo contribuye cada variable al valor de contaminación predicho.">
+    <section class="vista" id="vista-explicabilidad" hidden data-titulo="Factores del Aire" data-sub="Conoce qué está moviendo el aire de mañana, para bien o para mal.">
       <div class="tarjeta vacio-grande" id="xai-vacio">
         <span class="vacio-grande__ico" data-icon="search" aria-hidden="true"></span>
         <p>Primero agrega algún dato en <b>Mi aire</b>.</p>
         <a class="btn btn--primario" href="#simulador">Ir a Mi aire</a>
       </div>
       <div id="xai-contenido" hidden>
-        <p class="frase-grande" id="xai-frase"></p>
-        <div class="tarjeta tira">
-          <p class="xai-metodologia" title="Atribución calculada mediante TreeSHAP (SHapley Additive exPlanations) respecto al valor base E[f(X)].">
-            Atribución calculada mediante <strong>TreeSHAP</strong> (SHapley Additive exPlanations) respecto al valor base E[f(X)].
-          </p>
-          <p class="xai-resumen-base" id="xai-resumen-base"></p>
-          <div class="tira__columnas">
-            <section class="columna-xai">
-              <h3 class="aporte-favorable__titulo">Disminuye el índice predicho <span>(Aporte favorable)</span></h3>
-              <div class="columna" id="col-favorables"></div>
-            </section>
-            <section class="columna-xai">
-              <h3 class="aporte-desfavorable__titulo">Incrementa el nivel de contaminación <span>(Aporte desfavorable)</span></h3>
-              <div class="columna" id="col-desfavorables"></div>
-            </section>
-          </div>
-          <p class="suave centro" id="xai-nota"></p>
-        </div>
-
-        <div class="tarjeta tec">
-          <div class="segmentado" role="tablist" id="xai-tabs">
-            <button role="tab" type="button" data-objetivo="pm2_5" aria-selected="true">PM2.5</button>
-            <button role="tab" type="button" data-objetivo="pm10" aria-selected="false">PM10</button>
-          </div>
-          <h3>Cascada de aportes SHAP exactos (µg/m³)</h3>
-          <p class="suave">Cada paso suma o resta una característica desde el valor base hasta la predicción. Enfoca o apunta a una barra para ver el aporte exacto y su origen.</p>
-          <div class="grafico waterfall-grafico" id="grafico-cascada"></div>
-          <div class="ecuacion" id="xai-ecuacion"></div>
-        </div>
+        <section class="tarjeta xai-panel">
+          <header class="xai-cabecera">
+            <div class="xai-cabecera__texto">
+              <div class="xai-cabecera__titulo-fila">
+                <h2 class="xai-cabecera__titulo">¿Por qué cambia el aire mañana?</h2>
+                <button class="xai-como-funciona" id="xai-abrir-ayuda" type="button" aria-haspopup="dialog" aria-controls="xai-dialogo">
+                  ¿Cómo funciona? <span aria-hidden="true">ℹ</span>
+                </button>
+              </div>
+              <p class="frase-grande" id="xai-frase"></p>
+            </div>
+            <div class="xai-leyenda" aria-label="Significado de los colores">
+              <span><i class="xai-leyenda__punto xai-leyenda__punto--sube"></i> Sube la contaminación</span>
+              <span><i class="xai-leyenda__punto xai-leyenda__punto--baja"></i> Baja el pronóstico</span>
+            </div>
+          </header>
+          <div class="factores-grid" id="col-factores"></div>
+          <p class="suave centro xai-nota" id="xai-nota"></p>
+        </section>
       </div>
-    </section>
-
-    <!-- ---------- VISTA 3: ¿ES CONFIABLE? ---------- -->
-    <section class="vista" id="vista-modelos" hidden data-titulo="¿Es confiable?" data-sub="Consulta el rango de error observado, los datos ingresados y cómo se comparan los modelos.">
-      <div id="bm-contenido"><p class="suave">Cargando…</p></div>
+      <dialog class="xai-dialogo" id="xai-dialogo" aria-labelledby="xai-dialogo-titulo">
+        <section class="xai-dialogo__contenido">
+          <header class="xai-dialogo__cabecera">
+            <h2 id="xai-dialogo-titulo">¿Cómo funciona esta predicción?</h2>
+            <button class="xai-dialogo__cerrar" id="xai-cerrar-ayuda" type="button" aria-label="Cerrar explicación">×</button>
+          </header>
+          <div class="xai-dialogo__texto">
+            <p><strong>De dónde vienen los datos.</strong> El modelo toma las mediciones registradas para hoy en las estaciones de monitoreo de la ciudad. En esta herramienta los valores se ingresan para la simulación y los datos faltantes pueden estimarse; no son lecturas en vivo.</p>
+            <p><strong>Qué pronostica.</strong> Compara estas concentraciones con patrones históricos para anticipar el nivel de PM₂.₅ de mañana.</p>
+            <p><strong>El clima de mañana.</strong> Además de tus datos, el modelo usa el pronóstico del tiempo de hoy y de mañana (lluvia, viento, temperatura, nubes) que descarga de Open-Meteo. La lluvia y el viento suelen limpiar el aire; el aire quieto lo ensucia.</p>            
+            <p><strong>Por qué algunos factores ayudan y otros suman contaminación.</strong> Las barras azules indican condiciones que favorecen un aire más limpio. Las barras rojas indican emisiones presentes que, aunque estén en niveles seguros o bajos, suman partículas al ambiente en comparación con un aire totalmente puro.</p>
+            <p><strong>Qué significa la barra.</strong> Su longitud muestra cuánto peso tuvo cada factor en la decisión del modelo frente a los demás factores mostrados.</p>
+          </div>
+          <button class="btn btn--primario xai-dialogo__listo" id="xai-listo-ayuda" type="button">Entendido</button>
+        </section>
+      </dialog>
     </section>
   </main>
 </div>
 
-<dialog class="ficha-modelo" id="ficha-modelo" aria-labelledby="ficha-modelo-titulo">
-  <div class="ficha-modelo__cabecera">
-    <div><h2 id="ficha-modelo-titulo">Ficha técnica del modelo</h2>
-      <p class="suave">Algoritmo y métricas calculadas sobre datos de validación cronológica.</p></div>
-    <button class="btn btn--fantasma ficha-modelo__cerrar" id="cerrar-ficha-modelo" type="button" aria-label="Cerrar ficha técnica">Cerrar</button>
-  </div>
-  <div id="ficha-modelo-contenido" aria-live="polite"></div>
-</dialog>
-
-<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
-
+<link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
-<script src="{% static 'simulador/js/icons.js' %}"></script>
-<script src="{% static 'simulador/js/charts.js' %}"></script>
-<script src="{% static 'simulador/js/app.js' %}"></script>
+<script src="{% static 'simulador/js/icons.js' %}?v=2"></script>
+<script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=17"></script>
 </body>
 </html>
