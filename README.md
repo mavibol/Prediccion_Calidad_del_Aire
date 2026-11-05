@@ -23,7 +23,7 @@ El formulario ofrece las nueve variables de calidad del aire que alimentan el mo
 ## Puesta en marcha
 
 ```bash
-python -m venv .venv
+py -3.12 -m venv .venv
 .venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
