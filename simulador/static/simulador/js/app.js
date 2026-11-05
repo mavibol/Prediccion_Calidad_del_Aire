@@ -5,8 +5,8 @@
 
      1. Django incrusta el catálogo de variables en la página (json_script).
      2. El usuario agrega datos e introduce sus valores.
-     3. Cada movimiento programa un cálculo (espera 250 ms a que se detenga).
-     4. calcular() envía los pares [variable : valor] con fetch() a /api/predecir/.
+     3. Los controles actualizan sus lecturas, pero no recalculan el pronóstico.
+     4. Al pulsar «Predecir», calcular() envía los pares [variable : valor].
      5. El servidor imputa lo que falta, predice y calcula SHAP.
      6. Se repinta: pronóstico, escala, recomendaciones y factores
         explicados en lenguaje cotidiano.
@@ -51,7 +51,7 @@
     filas: new Map(),      // id de variable a <li>
     resultado: null,       // última respuesta del servidor
     peticion: null,        // AbortController de la petición en curso
-    temporizador: null,
+    cambiosPendientes: false,
     escena: null,
   };
   const NIVELES = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"];
@@ -206,6 +206,45 @@
      ----------------------------------------------------------------- */
   const selector = $("#selector-variable");
   const lista = $("#lista-variables");
+  const btnPredecir = $("#btn-predecir");
+  const estadoPrediccion = $("#estado-prediccion");
+
+  function formularioValido() {
+    if (!estado.filas.size) return false;
+    for (const [id, li] of estado.filas) {
+      const entrada = $(".dato__lectura", li);
+      const valor = Number(entrada.value);
+      if (!entrada.value.trim() || !entrada.validity.valid ||
+          !Number.isFinite(valor) || valor < PORID[id].min_valido || valor > PORID[id].max_valido) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function actualizarAccionPrediccion() {
+    btnPredecir.disabled = !formularioValido() || Boolean(estado.peticion);
+    if (!estado.filas.size) {
+      estadoPrediccion.textContent = "Agrega datos y pulsa Predecir para ver el resultado.";
+    } else if (estado.peticion) {
+      estadoPrediccion.textContent = "Calculando el pronóstico…";
+    } else if (!formularioValido()) {
+      estadoPrediccion.textContent = "Revisa los valores marcados antes de predecir.";
+    } else if (estado.cambiosPendientes) {
+      estadoPrediccion.textContent = "Hay cambios sin predecir. Pulsa el botón para actualizar el resultado.";
+    } else {
+      estadoPrediccion.textContent = "El pronóstico está actualizado.";
+    }
+  }
+
+  function marcarCambiosPendientes() {
+    if (estado.peticion) {
+      estado.peticion.abort();
+      estado.peticion = null;
+    }
+    estado.cambiosPendientes = true;
+    actualizarAccionPrediccion();
+  }
 
   function poblarSelector() {
     const libres = CATALOGO.filter((v) => !estado.filas.has(v.id));
@@ -228,7 +267,7 @@
     if (!v || estado.filas.has(id)) return;
     const d = decimales(v);
     const inicial = valor ?? v.mediana;
-    const maximoSlider = Math.max(v.max, inicial, 1);
+    const maximoSlider = Math.max(v.max_deslizador ?? v.max, inicial, 1);
     const pasoSlider = 1 / (10 ** d);
     const li = document.createElement("li");
     li.className = "dato";
@@ -249,33 +288,76 @@
                    aria-describedby="dato-error-${id}" value="${inicial}">
             <div class="dato__extremos" aria-hidden="true"><span>${fmt(v.min_valido, d)}</span><span>${fmt(maximoSlider, d)}</span></div>
           </div>
-          <output class="dato__lectura" for="dato-${id}">${fmt(inicial, d)} <small>${esc(v.unidad)}</small></output>
+          <label class="dato__lectura-contenedor">
+            <span class="sr-only">Valor de ${esc(v.etiqueta)}</span>
+            <input type="number" class="dato__lectura" min="${v.min_valido}" max="${v.max_valido}" step="${pasoSlider}"
+                   aria-label="Valor de ${esc(v.etiqueta)} en ${esc(v.unidad)}"
+                   aria-describedby="dato-error-${id}" value="${inicial}">
+            <small class="dato__unidad">${esc(v.unidad)}</small>
+          </label>
         </div>
         <small class="dato__error" id="dato-error-${id}" role="alert" hidden></small>
       </div>
-      <div class="dato__estado"><i></i><span></span></div>`;
+      <div class="dato__estado"><i></i><span class="dato__estado-texto"></span><span class="dato__fuera" role="status" aria-live="polite" hidden>Fuera del rango de entrenamiento</span></div>`;
 
     const num = $(".dato__num", li);
     num.id = `dato-${id}`;
     const lectura = $(".dato__lectura", li);
+    lectura.id = `dato-lectura-${id}`;
+    const error = $(`#dato-error-${id}`, li);
+    const mostrarError = (mensaje) => {
+      error.textContent = mensaje;
+      error.hidden = !mensaje;
+      lectura.setAttribute("aria-invalid", String(Boolean(mensaje)));
+      num.setAttribute("aria-invalid", String(Boolean(mensaje)));
+    };
     const actualizarDeslizador = () => {
       const progreso = (Number(num.value) - Number(num.min)) / (Number(num.max) - Number(num.min)) * 100;
       num.style.setProperty("--progreso", `${progreso}%`);
-      lectura.innerHTML = `${fmt(Number(num.value), d)} <small>${esc(v.unidad)}</small>`;
     };
     const pintarEstado = (x) => {
       const [txt, color] = estadoDe(v, x);
-      $(".dato__estado span", li).textContent = txt;
+      $(".dato__estado-texto", li).textContent = txt;
       $(".dato__estado i", li).style.background = color;
+      $(".dato__fuera", li).hidden = !(x > v.max);
+    };
+    const sincronizarCampo = () => {
+      const texto = lectura.value.trim();
+      const x = texto === "" ? NaN : Number(texto);
+      if (!Number.isFinite(x)) {
+        mostrarError("Escribe un valor numérico.");
+        return false;
+      }
+      if (x < v.min_valido || x > v.max_valido) {
+        mostrarError(`Ingresa un valor entre ${fmt(v.min_valido, d)} y ${fmt(v.max_valido, d)}.`);
+        return false;
+      }
+      if (lectura.validity.stepMismatch) {
+        mostrarError(`Usa incrementos de ${fmt(pasoSlider, d)}.`);
+        return false;
+      }
+      mostrarError("");
+      num.value = String(Math.min(Number(num.max), Math.max(Number(num.min), x)));
+      actualizarDeslizador();
+      pintarEstado(x);
+      return true;
     };
     actualizarDeslizador();
-    pintarEstado(inicial);
+    lectura.value = String(Number(num.value));
+    pintarEstado(Number(lectura.value));
 
     num.addEventListener("input", () => {
       const x = Number(num.value);
+      lectura.value = String(x);
+      mostrarError("");
       actualizarDeslizador();
       pintarEstado(x);
-      programarCalculo(500);
+      marcarCambiosPendientes();
+    });
+    lectura.addEventListener("input", () => {
+      const valido = sincronizarCampo();
+      marcarCambiosPendientes();
+      if (!valido) return;
     });
     $(".dato__info", li).addEventListener("click", (e) => {
       const p = $(".dato__que", li);
@@ -287,7 +369,7 @@
     lista.appendChild(li);
     estado.filas.set(id, li);
     poblarSelector();
-    programarCalculo(0);
+    marcarCambiosPendientes();
   }
 
   function quitarVariable(id) {
@@ -297,12 +379,14 @@
     li.classList.add("saliendo");
     setTimeout(() => li.remove(), 200);
     poblarSelector();
-    if (estado.filas.size) programarCalculo(0); else reiniciarResultados();
+    if (estado.filas.size) marcarCambiosPendientes(); else reiniciarResultados();
   }
 
   function reiniciarResultados() {
     if (estado.peticion) estado.peticion.abort();
+    estado.peticion = null;
     estado.resultado = null;
+    estado.cambiosPendientes = false;
     const veredicto = $("#veredicto");
     delete veredicto.dataset.clave;
     veredicto.innerHTML = `<span class="veredicto__ilustracion">${ILUSTRACIONES.cielo}</span>
@@ -324,10 +408,12 @@
     $("#clima-manana").hidden = true;
     $("#mini-estado").classList.remove("visible");
     mostrarAviso("");
+    actualizarAccionPrediccion();
     if (!$("#vista-explicabilidad").hidden) pintarPorque();
   }
 
   $("#btn-agregar").addEventListener("click", () => selector.value && agregarVariable(selector.value));
+  btnPredecir.addEventListener("click", calcular);
   $("#btn-limpiar").addEventListener("click", () => {
     [...estado.filas.values()].forEach((li) => li.remove());
     estado.filas.clear();
@@ -339,6 +425,7 @@
     [...estado.filas.values()].forEach((li) => li.remove());
     estado.filas.clear();
     CATALOGO.forEach((v) => agregarVariable(v.id, v[b.dataset.escenario]));
+    actualizarAccionPrediccion();
   }));
 
   /* -----------------------------------------------------------------
@@ -348,24 +435,25 @@
     const variables = [];
     for (const [id, li] of estado.filas) {
       const meta = PORID[id];
-      const x = Number($(".dato__num", li).value);
-      if (x === null || !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
+      const entrada = $(".dato__lectura", li);
+      const x = Number(entrada.value);
+      if (!entrada.value.trim() || !entrada.validity.valid ||
+          !Number.isFinite(x) || x < meta.min_valido || x > meta.max_valido) return null;
       variables.push({ variable: id, valor: x });
     }
     return variables.length ? { variables } : null;
   }
 
-  function programarCalculo(espera) {
-    clearTimeout(estado.temporizador);
-    estado.temporizador = setTimeout(calcular, espera);
-  }
-
   async function calcular() {
     const payload = leerFormulario();
-    if (!payload) return;
+    if (!payload) {
+      actualizarAccionPrediccion();
+      return;
+    }
     if (estado.peticion) estado.peticion.abort(); // una respuesta vieja nunca pisa a una nueva
     const control = new AbortController();
     estado.peticion = control;
+    actualizarAccionPrediccion();
     try {
       const r = await fetch(CONFIG.api.predecir, {
         method: "POST",
@@ -379,12 +467,16 @@
       if (!r.ok || !datos.ok) { mostrarAviso(datos.error || "No pudimos calcular. Intenta de nuevo."); return; }
       mostrarAviso("");
       estado.resultado = datos;
+      estado.cambiosPendientes = false;
       pintarResultado(datos);
       if (!$("#vista-explicabilidad").hidden) pintarPorque();
     } catch (e) {
       if (e.name !== "AbortError") mostrarAviso("Sin conexión con el servidor. ¿Está encendido Django?");
     } finally {
-      if (estado.peticion === control) estado.peticion = null;
+      if (estado.peticion === control) {
+        estado.peticion = null;
+        actualizarAccionPrediccion();
+      }
     }
   }
 

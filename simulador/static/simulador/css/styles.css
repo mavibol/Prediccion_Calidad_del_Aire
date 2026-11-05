@@ -156,11 +156,15 @@ button, input, select { font: inherit; color: inherit; }
 .dato__num::-moz-range-progress { height: 8px; border-radius: 999px; background: #4389c4; }
 .dato__num:focus-visible { outline: 3px solid var(--acento-suave); outline-offset: 5px; }
 .dato__extremos { display: flex; justify-content: space-between; color: var(--tinta-3); font-size: 11px; line-height: 1.2; }
-.dato__lectura { color: var(--tinta); font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dato__lectura small { color: var(--tinta-2); font-size: 12px; font-weight: 500; }
+.dato__lectura-contenedor { display: inline-flex; align-items: baseline; gap: 5px; }
+.dato__lectura { box-sizing: border-box; width: 112px; min-width: 0; padding: 2px 0; border: 0; border-bottom: 1px solid transparent; border-radius: 0; outline: 0; background: transparent; color: var(--tinta); font: inherit; font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; text-align: right; }
+.dato__lectura:focus-visible { border-bottom-color: var(--acento); outline: 0; }
+.dato__lectura[aria-invalid="true"] { border-bottom-color: var(--n3); }
+.dato__unidad { color: var(--tinta-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .dato__error { color: var(--n3); font-size: 12.5px; font-weight: 600; }
 .dato__estado { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; margin-top: 6px; color: var(--tinta-2); }
 .dato__estado i { width: 10px; height: 10px; border-radius: 50%; }
+.dato__fuera { padding: 2px 7px; border-radius: 999px; background: #fff3d6; color: #825900; font-size: 11px; font-weight: 650; }
 
 .ejemplos { margin: 12px 0 16px; color: var(--tinta-2); font-size: 14.5px; }
 .ejemplos__chips { display: flex; flex-wrap: nowrap; gap: 8px; margin-top: 8px; }
@@ -170,6 +174,11 @@ button, input, select { font: inherit; color: inherit; }
 .ejemplos__chips [data-escenario="mediana"] { color: #315d91; border-color: #dce8f7; background: #eaf2fc; }
 .ejemplos__chips [data-escenario="p90"] { color: #99613c; border-color: #f3e2d4; background: #fff0e3; }
 #btn-limpiar { margin-top: 10px; }
+.accion-prediccion { margin-top: 18px; }
+.btn--predecir { width: 100%; min-height: 50px; border-radius: 14px; font-size: 16px; box-shadow: 0 5px 14px rgba(57, 121, 198, .18); }
+.btn--predecir .icon { width: 19px; height: 19px; }
+.btn--predecir:disabled { background: #dce5f0; color: #64758c; box-shadow: none; cursor: not-allowed; filter: none; }
+.accion-prediccion__ayuda { margin: 7px 4px 0; color: var(--tinta-3); font-size: 12px; line-height: 1.4; text-align: center; }
 
 .panel-resultado { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 #resultado { display: flex; flex-direction: column; gap: 18px; }

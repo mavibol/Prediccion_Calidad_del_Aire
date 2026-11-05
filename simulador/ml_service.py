@@ -308,6 +308,7 @@ class ServicioML:
                 "id": v, **{k: meta[k] for k in ("etiqueta", "nombre_largo", "unidad",
                                                  "descripcion", "umbral_seguro",
                                                  "fuente_umbral", "grupo",
+                                                 "max_deslizador",
                                                  "min_valido", "max_valido")},
                 "tiene_previo": v in TIENE_PREVIO,
                 **{f"simple_{k}": cat.SENCILLO[v][k] for k in ("nombre", "icono", "que_es")},

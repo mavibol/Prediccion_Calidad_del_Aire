@@ -103,6 +103,8 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'id="catalogo-variables"')
         self.assertContains(r, 'id="lista-variables"')
+        self.assertContains(r, 'id="btn-predecir"')
+        self.assertContains(r, "> Predecir")
         self.assertContains(r, "csrf-token")
         self.assertContains(r, "PM₂.₅ mañana")
         self.assertContains(r, "Recomendaciones para tu día")
@@ -135,6 +137,14 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertEqual(por_id["pm2_5"]["etiqueta"], "PM₂.₅")
         self.assertEqual(por_id["pm2_5"]["nombre_largo"], "Material particulado fino")
         self.assertEqual((por_id["pm2_5"]["min_valido"], por_id["pm2_5"]["max_valido"]), (0.0, 5000.0))
+        maximos_deslizador = {
+            "pm2_5": 300, "pm10": 500, "carbon_monoxide": 20000,
+            "nitrogen_dioxide": 400, "sulphur_dioxide": 300, "ozone": 400,
+            "aerosol_optical_depth": 3.0, "dust": 500, "uv_index": 20,
+        }
+        for variable, maximo in maximos_deslizador.items():
+            self.assertEqual(por_id[variable]["max_deslizador"], maximo)
+            self.assertLess(maximo, por_id[variable]["max_valido"])
         self.assertEqual((por_id["aerosol_optical_depth"]["min_valido"],
                           por_id["aerosol_optical_depth"]["max_valido"]), (0.0, 5.0))
         self.assertEqual((por_id["uv_index"]["min_valido"], por_id["uv_index"]["max_valido"]), (0.0, 50.0))
@@ -208,6 +218,17 @@ class PrediccionTests(BaseConModelos):
         datos = r.json()
         self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 9000)
         self.assertTrue(any("menos confiable" in aviso for aviso in datos["avisos"]))
+
+    def test_pm25_150_aceptado_y_avisa_fuera_de_entrenamiento(self):
+        r = self.predecir([{"variable": "pm2_5", "valor": 150}])
+        self.assertEqual(r.status_code, 200, r.json())
+        datos = r.json()
+        self.assertTrue(datos["ok"])
+        self.assertEqual(datos["entrada"]["ingresadas"][0]["valor"], 150)
+        self.assertTrue(any(
+            "fuera del rango de entrenamiento" in aviso.lower()
+            for aviso in datos["avisos"]
+        ))
 
     def test_acepta_limites_superiores_plausibles(self):
         variables = [{"variable": variable, "valor": meta["max_valido"]}

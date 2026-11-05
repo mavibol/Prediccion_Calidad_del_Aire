@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Aire Claro · ¿Cómo estará el aire?</title>
-  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=13">
+  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
 </head>
 <body>
 <div class="app" id="app">
@@ -73,6 +73,12 @@
 
           <ul class="lista-variables" id="lista-variables" aria-label="Datos agregados"></ul>
 
+          <div class="accion-prediccion">
+            <button id="btn-predecir" type="button" class="btn btn--primario btn--predecir" aria-describedby="estado-prediccion" aria-controls="resultado" disabled>
+              <span data-icon="air" aria-hidden="true"></span> Predecir
+            </button>
+            <p class="accion-prediccion__ayuda" id="estado-prediccion" aria-live="polite">Agrega datos y pulsa Predecir para ver el resultado.</p>
+          </div>
           <button id="btn-limpiar" type="button" class="btn btn--fantasma" hidden><span data-icon="rotateCcw" aria-hidden="true"></span> Empezar de nuevo</button>
         </div>
 
@@ -186,11 +192,11 @@
   </main>
 </div>
 
-<link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=14">
+<link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
 <script src="{% static 'simulador/js/icons.js' %}?v=2"></script>
 <script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
-<script src="{% static 'simulador/js/app.js' %}?v=15"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=17"></script>
 </body>
 </html>

@@ -30,6 +30,7 @@ VARIABLES = {
         "umbral_seguro": 15.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Material particulado",
+        "max_deslizador": 300,
         "min_valido": 0.0, "max_valido": 5000.0,
     },
     "pm10": {
@@ -40,6 +41,7 @@ VARIABLES = {
         "umbral_seguro": 45.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Material particulado",
+        "max_deslizador": 500,
         "min_valido": 0.0, "max_valido": 10000.0,
     },
     "carbon_monoxide": {
@@ -50,6 +52,7 @@ VARIABLES = {
         "umbral_seguro": 4000.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "max_deslizador": 20000,
         "min_valido": 0.0, "max_valido": 100000.0,
     },
     "nitrogen_dioxide": {
@@ -60,6 +63,7 @@ VARIABLES = {
         "umbral_seguro": 25.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "max_deslizador": 400,
         "min_valido": 0.0, "max_valido": 20000.0,
     },
     "sulphur_dioxide": {
@@ -70,6 +74,7 @@ VARIABLES = {
         "umbral_seguro": 40.0,
         "fuente_umbral": "guía OMS 2021 (24 h)",
         "grupo": "Gases",
+        "max_deslizador": 300,
         "min_valido": 0.0, "max_valido": 100000.0,
     },
     "ozone": {
@@ -80,6 +85,7 @@ VARIABLES = {
         "umbral_seguro": 100.0,
         "fuente_umbral": "guía OMS 2021 (8 h)",
         "grupo": "Gases",
+        "max_deslizador": 400,
         "min_valido": 0.0, "max_valido": 5000.0,
     },
     "aerosol_optical_depth": {
@@ -90,6 +96,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "max_deslizador": 3.0,
         "min_valido": 0.0, "max_valido": 5.0,
     },
     "dust": {
@@ -100,6 +107,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "max_deslizador": 500,
         "min_valido": 0.0, "max_valido": 100000.0,
     },
     "uv_index": {
@@ -110,6 +118,7 @@ VARIABLES = {
         "umbral_seguro": None,
         "fuente_umbral": None,
         "grupo": "Aerosoles y radiación",
+        "max_deslizador": 20,
         "min_valido": 0.0, "max_valido": 50.0,
     },
 }
