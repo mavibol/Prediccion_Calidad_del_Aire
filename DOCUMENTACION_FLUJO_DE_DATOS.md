@@ -14,7 +14,8 @@ Ejemplo que usaremos de principio a fin: el usuario agrega **PM2.5 = 24,5 µg/m�
  4. fetch POST /api/predecir/  ------>  5. views.api_predecir (método, JSON, CSRF)
                                         6. ServicioML.validar() (variables válidas, números)
                                         7. ServicioML.imputar() (7 variables ausentes)
-                                        8. fila_desde_lecturas() (9 lecturas a 21 variables)
+                                        8. clima_hoy_y_manana() (pronóstico de Open-Meteo)
+                                           fila_desde_lecturas() (9 lecturas + clima a 51 variables)
                                         9. 84 escenarios de calendario (12 meses x 7 días)
                                        10. modelo.predict() calcula el promedio
                                        11. TreeSHAP calcula las contribuciones promedio
@@ -89,9 +90,9 @@ En el ejemplo faltan 7 de 9 variables. El modelo necesita todas, así que `Servi
 
 Las variables estimadas se marcan como **«estimada»** en la interfaz para que el usuario sepa qué parte de la explicación descansa en supuestos.
 
-## 8. De 9 lecturas a las 21 variables del modelo
+## 8. De 9 lecturas y el clima a las 51 variables del modelo
 
-El modelo desplegado (escenario A de la tesis) no recibe «PM2.5», sino 21 variables construidas a partir de los días previos. `fila_desde_lecturas()` (en `simulador/ml/datos.py`, **el mismo módulo que construye la matriz de entrenamiento**) hace la traducción:
+El modelo desplegado (escenario C de la tesis, LightGBM) no recibe «PM2.5», sino 51 variables: 21 construidas a partir de los días previos de calidad del aire y 30 meteorológicas. `fila_desde_lecturas()` (en `simulador/ml/datos.py`, **el mismo módulo que construye la matriz de entrenamiento**) hace la traducción:
 
 | Variable del modelo | Con lectura anterior (PM2.5) | Sin lectura anterior (NO₂) |
 |---|---|---|
@@ -102,6 +103,8 @@ El modelo desplegado (escenario A de la tesis) no recibe «PM2.5», sino 21 vari
 
 Cuando falta la lectura anterior se asume **persistencia** (el valor de ayer es igual al de hoy): es el supuesto más neutral, coherente con la alta autocorrelación de la serie (ACF(1) = 0,64 para PM2.5), y produce `delta = 0`, es decir, «sin tendencia».
 
+Las 30 variables meteorológicas no las escribe el usuario. `clima_hoy_y_manana()` descarga de Open-Meteo el pronóstico horario de hoy y de mañana. `meteo.agregar_diario()` lo resume por día con las mismas reglas del notebook del EDA: la lluvia se suma y la temperatura, el viento, la humedad, las nubes, la presión y la capa límite se promedian. El tiempo de **mañana** entra como las 15 variables del día pronosticado y el de **hoy** como sus rezagos (`_lag1`). La descarga se guarda una hora en memoria. Si no hay internet, se usa el promedio histórico de cada mes calculado con `meteorologia_diaria.csv`, y la interfaz lo avisa.
+
 ## 9. Sin fechas: los 84 escenarios de calendario
 
 El modelo también usa `mes` y `dia_semana`, pero el simulador es **agnóstico al tiempo**: el usuario no da fecha. En lugar de inventar una, el servicio evalúa la misma fila en las **12 × 7 = 84 combinaciones** de mes y día de la semana y promedia. El resultado se interpreta como «la calidad del aire esperada con estas condiciones, en una época cualquiera del año».
@@ -110,19 +113,19 @@ El modelo también usa `mes` y `dia_semana`, pero el simulador es **agnóstico a
 
 ## 10. Predicción
 
-Cada uno de los dos modelos (PM2.5 y PM10) predice las 84 filas y se toma el promedio. Los nombres y el orden de columnas se leen **del propio modelo** (`feature_names_in_` o `get_booster().feature_names`), y `nombre_canonico()` acepta alias (`NO2_lag1`, `pm25_ma3`, `month`…) para que los `.joblib` exportados desde Colab funcionen sin renombrar nada.
+Cada uno de los dos modelos (PM2.5 y PM10) predice las 84 filas y se toma el promedio. Los modelos son LightGBM en formato nativo (`modelo_pm2_5.txt` y `modelo_pm10.txt`, exportados desde Colab). Los nombres y el orden de columnas se leen **del propio modelo** (`feature_name()`), y `nombre_canonico()` reconoce también las variables meteorológicas. El servicio comprueba que las columnas sean exactamente las 51 del escenario C; con los modelos reales, la aplicación reproduce las métricas de prueba del notebook (MAE 2,4045 y 2,4856).
 
 ## 11. SHAP: cuánto empujó cada variable
 
 Para cada fila, TreeSHAP calcula un valor φᵢ por variable, que cumple la **propiedad aditiva**:
 
-> predicción = valor base + φ₁ + φ₂ + … + φ₂₁
+> predicción = valor base + φ₁ + φ₂ + … + φ₅₁
 
 donde el valor base es la predicción media del modelo sobre los datos de entrenamiento («un día típico», ≈ 13,2 µg/m³ para PM2.5).
 
 Como la predicción final es el promedio de 84 filas, se promedian también sus explicaciones. La aditividad se conserva porque el promedio de sumas es la suma de promedios:
 
-> promedio(pred) = base + promedio(φ₁) + … + promedio(φ₂₁)
+> promedio(pred) = base + promedio(φ₁) + … + promedio(φ₅₁)
 
 La propiedad aditiva permite resumir las contribuciones de las variables derivadas en factores que el usuario reconoce. La interfaz presenta únicamente esa explicación resumida.
 
@@ -132,13 +135,19 @@ El explicador se elige en cascada (`simulador/ml/explicadores.py`):
 2. las contribuciones nativas de XGBoost (`pred_contribs=True`) o LightGBM, que implementan el mismo algoritmo en C++;
 3. un TreeSHAP propio en Python para árboles de scikit-learn (validado contra el cálculo exacto por fuerza bruta).
 
-## 12. De 21 contribuciones a una explicación para no expertos
+## 12. De 51 contribuciones a una explicación para no expertos
 
 Mostrar `pm2_5_ma3`, `pm2_5_delta` y `pm2_5_lag2` por separado confunde a un ciudadano. Por eso `_explicacion()` **suma las contribuciones de todas las variables derivadas de una misma medición**:
 
 > aporte(PM2.5) = φ(`pm2_5_lag1`) + φ(`pm2_5_lag2`) + φ(`pm2_5_ma3`) + φ(`pm2_5_delta`)
 
 Así el usuario ve una explicación resumida por variable, en lenguaje cotidiano. Las contribuciones internas del calendario y de las variables derivadas no se presentan en la interfaz.
+
+Con la meteorología se aplica la misma idea: las 30 variables de clima se agrupan en 7 **factores de clima** (lluvia, viento, temperatura, humedad, nubes y sol, presión y altura de mezcla). El grupo de cada variable está definido en `catalogo.CLIMA`. Por ejemplo:
+
+> aporte(Lluvia) = φ(`precipitacion_sum`) + φ(`precipitacion_sum_lag1`)
+
+En la interfaz aparecen con la etiqueta «Clima de mañana» y muestran el valor pronosticado para mañana.
 
 El **semáforo** (`_alerta()`) ubica cada predicción en los cortes del ICA de la Resolución 2254 de 2017 y los mapea a 5 niveles (Buena: Sin contaminación; Aceptable: Bajo; Dañina para grupos sensibles: Moderado; Dañina: Alto; Muy dañina / Peligrosa: Crítico). Se toma **el peor entre el pronóstico y las lecturas actuales de PM que dio el usuario**. Los valores superiores al máximo histórico se aceptan, pero la aplicación advierte que la predicción puede ser menos confiable fuera del rango de entrenamiento. Si el pronóstico supera el P90 de entrenamiento se muestra la insignia «día crítico local» de la tesis.
 
@@ -163,5 +172,7 @@ La API entrega una explicación resumida (`simple`, generada por `explicacion_si
 | Persistencia cuando falta la lectura anterior | Supuesto neutral, alta autocorrelación | Se usa internamente para construir variables derivadas |
 | Promedio sobre 84 combinaciones de calendario | El simulador no usa fechas | Barra «Calendario (promedio de todo el año)» |
 | Semáforo = peor entre pronóstico y lectura actual | Los árboles no extrapolan | Frase de motivo explícita + aviso de valores fuera de rango |
-| Agregación de las 21 variables en 9 + calendario | Comprensión para no expertos | La interfaz presenta solo los factores reconocibles por el usuario |
+| Agregación de las 51 variables en 9 + 7 factores de clima + calendario | Comprensión para no expertos | La interfaz presenta solo los factores reconocibles por el usuario |
 | ma3 = media(t−1,t−2,t−3), delta = (t−1)−(t−2) | Mismas definiciones del notebook del Capítulo 2 | Confirmado: se reproducen las 1.294 filas |
+| Clima de hoy y mañana tomado del pronóstico de Open-Meteo | El modelo C necesita la meteorología del día pronosticado | El entrenamiento usó meteorología observada (ERA5); el error del pronóstico del clima se suma al del modelo |
+| Clima típico del mes cuando no hay internet | La aplicación sigue funcionando sin conexión | Aviso en la tarjeta «Clima de mañana» |
