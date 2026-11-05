@@ -321,6 +321,7 @@
     pintarEscala(null);
     pintarRecomendaciones(null);
     $("#alerta-local").hidden = true;
+    $("#clima-manana").hidden = true;
     $("#mini-estado").classList.remove("visible");
     mostrarAviso("");
     if (!$("#vista-explicabilidad").hidden) pintarPorque();
@@ -433,6 +434,8 @@
     $("#alerta-local").hidden = !a.dia_critico_local;
     $("#alerta-local").innerHTML = `${icono("triangleAlert", "icon")} Mañana el aire estaría más sucio que en 9 de cada 10 días de la ciudad.`;
 
+    // Clima de mañana usado por el modelo (escenario C)
+    pintarClima(d.clima);
     // Consejos para hoy
     pintarRecomendaciones(d.recomendaciones);
 
@@ -444,6 +447,22 @@
     mini.classList.add("visible");
 
   }
+  
+  function pintarClima(c) {
+    const caja = $("#clima-manana");
+    caja.hidden = !c;
+    if (!c) return;
+    if (!c.disponible) {
+      caja.innerHTML = `<p class="clima-manana__titulo">${icono("cloud", "icon")} Clima de mañana</p>
+        <p class="clima-manana__fuente">${esc(c.fuente)}</p>`;
+      return;
+    }
+    caja.innerHTML = `<p class="clima-manana__titulo">Clima de mañana</p>
+      <div class="clima-manana__datos">${c.resumen.map((x) =>
+        `<span class="clima-manana__dato">${icono(x.icono, "icon")} ${esc(x.nombre)}: <strong>${fmt(x.valor, 1)} ${esc(x.unidad)}</strong></span>`).join("")}
+      </div>
+      <p class="clima-manana__fuente">${esc(c.fuente)}.</p>`;
+  }
 
   /* -----------------------------------------------------------------
      PASO 6 · ¿Por qué? — factores explicados en lenguaje cotidiano
@@ -454,7 +473,12 @@
     ozone: "Gas que se produce a nivel del suelo cuando la radiación solar y las altas temperaturas reaccionan con los gases de los vehículos.",
     pm10: "Partículas de polvo del suelo, cenizas y material suspendido levantado por el viento y obras viales.",
     carbon_monoxide: "Monóxido de carbono emitido por vehículos, especialmente en situaciones de congestión o tráfico lento.",
-  };
+    lluvia: "La lluvia de mañana lava el aire: las gotas arrastran las partículas hasta el suelo.",
+    viento: "El viento dispersa la contaminación y la saca del valle; con poco viento el humo se acumula.",
+    temperatura: "Noches frías y días calientes indican un aire quieto que atrapa la contaminación cerca del suelo.",
+    capa_mezcla: "Altura hasta donde se mezcla el aire. Si es baja, la contaminación queda atrapada como bajo una tapa.",
+    humedad: "La humedad alta favorece la formación de partículas microscópicas que irritan los pulmones.",
+    };
 
   function estadoSalud(variable, valor) {
     const umbral = PORID[variable]?.umbral_seguro;
@@ -473,7 +497,9 @@
     const peso = Math.min(100, Math.max(15, Math.abs(f.aporte) / maxAporte * 100));
     const unidad = f.unidad === "adim." || f.unidad === "índice" ? "" : ` ${esc(f.unidad)}`;
     const decimalesValor = f.valor < 5 ? 2 : 1;
-    const salud = estadoSalud(f.variable, f.valor);
+    const salud = f.tipo === "clima"
+      ? { etiqueta: "Clima de mañana", clase: "factor__salud--neutral" }
+      : estadoSalud(f.variable, f.valor);
     const accion = favorable ? "limpieza" : "concentración";
     const impacto = esPrincipal
       ? `Aporte principal a la ${accion}`
@@ -554,7 +580,7 @@
     const saludables = a.orden === 0;
     const factorPrincipal = relevantes[0];
     const influencia = factorPrincipal
-      ? `Lo que más pesa es ${factorPrincipal.nombre_comun}, junto con los demás datos del aire.`
+      ? `Lo que más pesa es ${factorPrincipal.tipo === "clima" ? "el clima de mañana: " : ""}${factorPrincipal.nombre_comun}, junto con los demás datos del aire.`
       : "El resultado combina los datos ingresados y los estimados automáticamente.";
     const estadoHumano = saludables
       ? "se mantiene en niveles saludables"

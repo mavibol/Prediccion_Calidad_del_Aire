@@ -135,11 +135,40 @@ ALIAS_CALENDARIO = {
 }
 TRANSFORMACIONES = ("lag1", "lag2", "ma3", "delta")
 
-# Objetivos del escenario A (pronóstico a 24 h)
+
+# Objetivos del escenario C (pronóstico a 24 h + meteorología): modelos LightGBM
+# exportados en formato nativo .txt desde la sección 11 del notebook E2_Capitulo2.
 OBJETIVOS = {
-    "pm2_5": {"etiqueta": "PM₂.₅", "archivo": "modelo_pm2_5_XGBoost.joblib"},
-    "pm10": {"etiqueta": "PM₁₀", "archivo": "modelo_pm10_XGBoost.joblib"},
+    "pm2_5": {"etiqueta": "PM₂.₅", "archivo": "modelo_pm2_5.txt"},
+    "pm10": {"etiqueta": "PM₁₀", "archivo": "modelo_pm10.txt"},
 }
+
+# ---------------------------------------------------------------------------
+# 1b. Clima (escenario C). El usuario NO las escribe: se descargan del
+#     pronóstico de Open-Meteo. Para explicarlas al público, las 30 variables
+#     meteorológicas del modelo (15 de mañana + 15 de hoy) se agrupan en 7 factores.
+#     columna: la variable que se muestra como valor del factor (la de mañana).
+# ---------------------------------------------------------------------------
+CLIMA = {
+    "lluvia": {"etiqueta": "Lluvia", "nombre_largo": "Precipitación acumulada", "unidad": "mm",
+               "columna": "precipitacion_sum", "variables": ["precipitacion_sum"]},
+    "viento": {"etiqueta": "Viento", "nombre_largo": "Velocidad media del viento", "unidad": "km/h",
+               "columna": "viento_vel_media",
+               "variables": ["viento_vel_media", "viento_vel_max", "viento_u_media", "viento_v_media"]},
+    "temperatura": {"etiqueta": "Temperatura", "nombre_largo": "Temperatura media", "unidad": "°C",
+                    "columna": "temp_media",
+                    "variables": ["temp_media", "temp_max", "temp_min", "amplitud_termica"]},
+    "humedad": {"etiqueta": "Humedad", "nombre_largo": "Humedad relativa media", "unidad": "%",
+                "columna": "humedad_media", "variables": ["humedad_media"]},
+    "nubes": {"etiqueta": "Nubes y sol", "nombre_largo": "Nubosidad media", "unidad": "%",
+              "columna": "nubosidad_media", "variables": ["nubosidad_media", "radiacion_sum"]},
+    "presion": {"etiqueta": "Presión", "nombre_largo": "Presión atmosférica media", "unidad": "hPa",
+                "columna": "presion_media", "variables": ["presion_media"]},
+    "capa_mezcla": {"etiqueta": "Capa de mezcla", "nombre_largo": "Altura media de la capa límite", "unidad": "m",
+                    "columna": "capa_limite_media", "variables": ["capa_limite_media", "capa_limite_min"]},
+}
+# variable meteorológica diaria -> factor de clima
+CLIMA_DE = {v: g for g, meta in CLIMA.items() for v in meta["variables"]}
 
 # ---------------------------------------------------------------------------
 # 2. Semáforo de 5 niveles, mapeado del ICA de la Resolución 2254 de 2017
@@ -240,6 +269,7 @@ GRUPOS = {
     "Gases": ["carbon_monoxide", "nitrogen_dioxide", "sulphur_dioxide", "ozone"],
     "Aerosoles y radiación": ["aerosol_optical_depth", "dust", "uv_index"],
     "Calendario": ["mes", "dia_semana"],
+    "Clima": list(CLIMA),
 }
 
 # ---------------------------------------------------------------------------
@@ -264,7 +294,24 @@ SENCILLO = {
     "dust": {"nombre": "Polvo del desierto", "icono": "dunes",
              "que_es": "Polvo que llega desde muy lejos, como el Sahara."},
     "uv_index": {"nombre": "Fuerza del sol", "icono": "sun",
-                 "que_es": "Radiación del sol; ayuda a que se forme ozono."},
+                                  "que_es": "Radiación del sol; ayuda a que se forme ozono."},
+                                  
+    # Factores de clima (escenario C)
+    "lluvia": {"nombre": "Lluvia", "icono": "rain",
+               "que_es": "La lluvia lava el aire: arrastra las partículas hasta el suelo."},
+    "viento": {"nombre": "Viento", "icono": "air",
+               "que_es": "El viento dispersa la contaminación y la saca del valle."},
+    "temperatura": {"nombre": "Temperatura", "icono": "thermo",
+                    "que_es": "Mañanas frías y tardes calientes indican aire quieto que atrapa el humo."},
+    "humedad": {"nombre": "Humedad", "icono": "drop",
+                "que_es": "Cuánta agua hay en el aire; cambia el tamaño y el peso de las partículas."},
+    "nubes": {"nombre": "Nubes y sol", "icono": "cloud",
+              "que_es": "Con más sol se forma más ozono; las nubes suelen venir con lluvia."},
+    "presion": {"nombre": "Presión del aire", "icono": "target",
+                "que_es": "La presión alta suele traer aire estable, que dispersa menos el humo."},
+    "capa_mezcla": {"nombre": "Altura de mezcla", "icono": "arrowUp",
+                    "que_es": "Qué tan alto se mezcla el aire; si es baja, el humo queda atrapado cerca del suelo."},
+
 }
 
 # Clave SVG, título y frase de cada nivel del semáforo

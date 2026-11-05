@@ -1,6 +1,7 @@
 """
-Pruebas de la app. Son autosuficientes: entrenan modelos pequeños de
-scikit-learn en una carpeta temporal, así que no dependen de los .joblib reales.
+Pruebas de la app. Son autosuficientes: entrenan modelos LightGBM pequeños del
+escenario C en una carpeta temporal, así que no dependen de los modelos reales.
+No consultan Internet: usan el clima típico de cada mes (AIRE_METEO_EN_LINEA=False).
 
     python manage.py test simulador
 """
@@ -9,15 +10,17 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import joblib
+from unittest import mock
+
+import lightgbm as lgb
 from django.conf import settings
 from django.test import Client, TestCase, override_settings
-from sklearn.ensemble import GradientBoostingRegressor
-from xgboost import XGBRegressor
 
 from .ml import catalogo as cat
-from .ml.datos import cargar_y_limpiar, columnas_escenario_a, construir_features, particion_cronologica
-from .ml_service import ServicioML, nivel_ica, nombre_canonico, reiniciar_servicio
+from .ml import meteo
+from .ml.datos import (cargar_meteo, cargar_y_limpiar, columnas_escenario_c, construir_features,
+                       particion_cronologica)
+from .ml_service import ServicioML, nivel_ica, nombre_canonico, reiniciar_servicio, variable_de
 
 URL_PREDECIR = "/api/predecir/"
 
@@ -27,13 +30,13 @@ class BaseConModelos(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.tmp = Path(tempfile.mkdtemp())
-        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV))
+        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV), cargar_meteo(settings.AIRE_RUTA_METEO))
         tr, _, _ = particion_cronologica(mat)
-        X = tr[columnas_escenario_a()]
+        X = tr[columnas_escenario_c()]
         for clave, conf in cat.OBJETIVOS.items():
-            m = GradientBoostingRegressor(n_estimators=25, max_depth=3, random_state=0)
-            joblib.dump(m.fit(X, tr[f"y_{clave}"]), cls.tmp / conf["archivo"])
-        cls._ajustes = override_settings(AIRE_DIR_MODELOS=cls.tmp)
+            m = lgb.LGBMRegressor(n_estimators=40, num_leaves=7, random_state=0, verbose=-1)
+            m.fit(X, tr[f"y_{clave}"]).booster_.save_model(cls.tmp / conf["archivo"])
+        cls._ajustes = override_settings(AIRE_DIR_MODELOS=cls.tmp, AIRE_METEO_EN_LINEA=False)
         cls._ajustes.enable()
         reiniciar_servicio()
 
@@ -50,27 +53,48 @@ class BaseConModelos(TestCase):
                       content_type="application/json")
 
 
-class ModelosNativosXGBoostTests(TestCase):
-    def test_carga_json_nativo_preferido_sobre_joblib(self):
-        mat = construir_features(cargar_y_limpiar(settings.AIRE_RUTA_CSV))
-        tr, _, _ = particion_cronologica(mat)
-        columnas = columnas_escenario_a()
+class EscenarioCTests(BaseConModelos):
+    def test_carga_lightgbm_txt_con_51_variables(self):
+        from .ml_service import obtener_servicio
+        s = obtener_servicio()
+        self.assertTrue(s.listo, s.error_carga)
+        self.assertTrue(s.usa_meteo)
+        for obj in s.objetivos.values():
+            self.assertEqual(len(obj.columnas), 51)
+            self.assertTrue(obj.archivo.endswith(".txt"))
 
-        with tempfile.TemporaryDirectory() as temp:
-            carpeta = Path(temp)
-            for clave, conf in cat.OBJETIVOS.items():
-                modelo = XGBRegressor(n_estimators=5, max_depth=2, n_jobs=1, random_state=0)
-                modelo.fit(tr[columnas], tr[f"y_{clave}"])
-                modelo.save_model(carpeta / conf["archivo"].replace(".joblib", ".json"))
-                joblib.dump("archivo joblib ignorado", carpeta / conf["archivo"])
+    def test_sin_internet_usa_clima_tipico_del_mes(self):
+        d = self.predecir([{"variable": "pm2_5", "valor": 20}]).json()
+        self.assertFalse(d["clima"]["disponible"])
+        nombres = {f["variable"] for k in ("pm2_5", "pm10")
+                   for lado in ("favorables", "desfavorables") for f in d["explicacion"][k]["simple"][lado]}
+        self.assertTrue(nombres <= set(cat.VARIABLES) | set(cat.CLIMA))
 
-            servicio = ServicioML(carpeta, settings.AIRE_RUTA_CSV)
+    def test_con_pronostico_del_clima(self):
+        from .ml_service import obtener_servicio
+        s = obtener_servicio()
+        hoy = {c: s.clima_mes[1][c] for c in meteo.COLS_METEO}
+        lluvioso = {**hoy, "precipitacion_sum": 30.0}
+        try:
+            s.meteo_en_linea, s._cache_meteo = True, None
+            with mock.patch("simulador.ml_service.descargar_hoy_y_manana", return_value=(hoy, lluvioso, "2026-01-15")):
+                d = self.predecir([{"variable": "pm2_5", "valor": 20}]).json()
+        finally:
+            s.meteo_en_linea, s._cache_meteo = False, None
+        self.assertTrue(d["clima"]["disponible"])
+        lluvia = next(x for x in d["clima"]["resumen"] if x["id"] == "lluvia")
+        self.assertEqual(lluvia["valor"], 30.0)
 
-        self.assertTrue(servicio.listo, servicio.error_carga)
-        self.assertEqual(
-            {objetivo.archivo for objetivo in servicio.objetivos.values()},
-            {"modelo_pm2_5_XGBoost.json", "modelo_pm10_XGBoost.json"},
-        )
+    def test_agregacion_diaria_igual_al_notebook(self):
+        import pandas as pd
+        t = pd.date_range("2026-01-01", periods=48, freq="h")
+        h = pd.DataFrame({"time": t, "temperature_2m": 20.0, "relative_humidity_2m": 80.0, "precipitation": 0.5,
+                          "wind_speed_10m": 10.0, "wind_direction_10m": 90.0, "shortwave_radiation": 100.0,
+                          "cloud_cover": 50.0, "surface_pressure": 850.0, "boundary_layer_height": 400.0})
+        d = meteo.agregar_diario(h)
+        self.assertEqual(set(d.columns) - {"date"}, set(meteo.COLS_METEO))
+        self.assertAlmostEqual(d["precipitacion_sum"].iloc[0], 12.0)
+        self.assertAlmostEqual(d["viento_u_media"].iloc[0], -10.0)
 
 
 class PaginaYCatalogoTests(BaseConModelos):
@@ -86,8 +110,9 @@ class PaginaYCatalogoTests(BaseConModelos):
         self.assertContains(r, 'aria-label="Escala de calidad; se resaltará al calcular el pronóstico"')
         self.assertContains(r, 'class="rec-card rec-card--pendiente"', count=3)
         self.assertNotContains(r, 'id="bienvenida"')
-        self.assertContains(r, "Factores que ayudan a limpiar el aire")
-        self.assertContains(r, "Factores que aumentan la contaminación")
+        self.assertContains(r, "Sube la contaminación")
+        self.assertContains(r, "Baja el pronóstico")
+        self.assertContains(r, 'id="clima-manana"')
         self.assertNotContains(r, "Modo técnico")
         self.assertNotContains(r, "Precisión del Modelo")
         self.assertNotContains(r, 'id="ficha-modelo"')
@@ -154,7 +179,8 @@ class PrediccionTests(BaseConModelos):
         self.assertTrue(all(f["aporte"] >= 0 for f in s["desfavorables"]))
         self.assertTrue(all(f["aporte"] <= 0 for f in s["favorables"]))
         for f in s["desfavorables"] + s["favorables"]:
-            self.assertIn("µg/m³", f["unidad"])
+            if f["tipo"] == "aire":
+                self.assertIn("µg/m³", f["unidad"])
             self.assertIn("—", f["nombre"])
         self.assertTrue(all(len(r["corto"].split()) <= 6 for r in d["recomendaciones"]))
 
@@ -241,6 +267,9 @@ class UtilidadesTests(TestCase):
         self.assertEqual(nombre_canonico("NO2_lag1"), "nitrogen_dioxide_lag1")
         self.assertEqual(nombre_canonico("pm25_ma3"), "pm2_5_ma3")
         self.assertEqual(nombre_canonico("month"), "mes")
+        self.assertEqual(nombre_canonico("viento_vel_media_lag1"), "viento_vel_media_lag1")
+        self.assertEqual(variable_de("precipitacion_sum_lag1"), "lluvia")
+        self.assertEqual(variable_de("temp_media"), "temperatura")
         with self.assertRaises(ValueError):
             nombre_canonico("temperatura_lag1")
 

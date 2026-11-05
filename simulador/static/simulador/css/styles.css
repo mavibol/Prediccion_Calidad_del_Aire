@@ -348,3 +348,11 @@ button, input, select { font: inherit; color: inherit; }
 .xai-nota { margin: 12px 4px 0; font-size: 11px; line-height: 1.45; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- Clima de mañana (escenario C) ---------- */
+.clima-manana { border-radius: 16px; padding: 12px 16px; background: var(--acento-suave); border: 1px solid var(--borde); margin-top: 12px; }
+.clima-manana__titulo { font-weight: 700; margin: 0 0 8px; }
+.clima-manana__datos { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.clima-manana__dato { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+.clima-manana__dato .icon { width: 20px; height: 20px; color: var(--acento); }
+.clima-manana__fuente { font-size: 13px; color: var(--tinta-2); margin: 8px 0 0; }

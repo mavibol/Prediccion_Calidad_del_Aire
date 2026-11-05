@@ -1,101 +1,77 @@
-# Aire Claro v3 · Simulador de calidad del aire con IA explicable
+# Pronóstico explicable de PM2.5 y PM10 — Valle de Aburrá
 
-Plataforma Django para simular y anticipar la calidad del aire (PM2.5 y PM10, próximas 24 h) a partir de **magnitudes instantáneas**, sin fechas. El usuario arma su propio conjunto de variables, recibe un semáforo de 5 niveles con recomendaciones prácticas y una explicación SHAP en lenguaje cotidiano.
+Aplicación web en Django del trabajo de grado *Modelo predictivo y explicable de PM2.5 y PM10 en el Valle de Aburrá*. Presenta el pronóstico a 24 horas de PM2.5 y PM10 del escenario principal seleccionado en el Capítulo 2 (**C. Pronóstico 24 h + meteorología**, modelos LightGBM) y sus explicaciones TreeSHAP.
 
-## Módulos (pensados para público general)
+## Páginas
 
-| Pantalla | Qué ve el usuario |
+| Ruta | Contenido |
 |---|---|
-| **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un amplio rango de plausibilidad, independiente de los máximos observados en el dataset; el servidor rechaza valores fuera de esos límites. El visualizador presenta el estado, el pronóstico de PM₂.₅ y una escala de calidad; tres tarjetas resumen recomendaciones para deporte, grupos sensibles y el hogar. |
-| **Factores del Aire** (explicabilidad) | Destaca una explicación narrativa de los factores con mayor influencia y organiza debajo los que ayudan a limpiar el aire y los que pueden aumentar la contaminación. Muestra los datos medidos o estimados y una barra comparativa de influencia relativa; la interpretación no implica causalidad. |
-
-El formulario usa nomenclatura formal (por ejemplo, PM₁₀ y PM₂.₅) y las unidades del dataset. Solo ofrece las nueve variables que realmente alimentan al modelo; temperatura, humedad relativa, radiación solar y velocidad del viento no forman parte del dataset/modelo actual.
-
-## Puesta en marcha
-
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-**Opción A — usar tus modelos de Colab (recomendado).** Copia `modelo_pm2_5_XGBoost.joblib`, `modelo_pm10_XGBoost.joblib` (y, si lo tienes, `metadatos_modelos.json`) a `ml_models/`. Luego genera el benchmark (no sobrescribe tus modelos):
-
-```bash
-python scripts/construir_artefactos.py
-```
-
-También puedes exportar los modelos XGBoost ya entrenados en formato nativo `.json` desde Colab. Si están presentes, la aplicación prefiere esos archivos a los `.joblib` con el mismo nombre base; así se evitan incompatibilidades de serialización entre versiones:
-
-```python
-modelo.save_model("modelo_pm2_5_XGBoost.json")
-```
-
-Coloca ambos JSON (`modelo_pm2_5_XGBoost.json` y `modelo_pm10_XGBoost.json`) en `ml_models/`. No es necesario volver a entrenar los modelos.
-
-**Opción B — entrenar aquí.** Si `ml_models/` está vacío, el mismo comando entrena XGBoost con el protocolo y los hiperparámetros del notebook del Capítulo 2 (Tabla 10) y guarda los `.joblib`.
-
-Después:
-
-```bash
-python manage.py test simulador    # pruebas del simulador
-python manage.py runserver
-```
-
-Abre http://127.0.0.1:8000/
+| `/` | Pronóstico para el día siguiente al último dato (o para cualquier fecha histórica), categoría ICA, día crítico, meteorología usada y explicación local TreeSHAP |
+| `/historial/` | Métricas en el periodo de prueba frente a la persistencia y series observadas vs. pronosticadas |
+| `/explicabilidad/` | Importancia global de variables (TreeSHAP) e importancia por grupos, incluida la meteorología |
+| `/acerca/` | Datos, modelo, variables, tabla del ICA (Resolución 2254 de 2017) y limitaciones |
 
 ## Estructura
 
 ```
-aire_claro_v3/
-├── manage.py
-├── requirements.txt
-├── config/                      settings.py · urls.py · wsgi.py · asgi.py
-├── datos/air_quality_historical.csv
-├── ml_models/                   modelos .joblib o .json + benchmark_modelos.json
-├── scripts/construir_artefactos.py
-├── simulador/
-│   ├── ml_service.py            pipeline: validar -> imputar -> 21 variables -> predecir -> SHAP
-│   ├── ml/
-│   │   ├── catalogo.py          variables, umbrales OMS, cortes ICA, recomendaciones, resultados tesis
-│   │   ├── datos.py             limpieza + ingeniería de variables (compartido con el entrenamiento)
-│   │   ├── explicadores.py      shap -> contribuciones nativas -> TreeSHAP propio
-│   │   └── narrativa.py         SHAP -> factores para explicar en lenguaje claro
-│   ├── views.py · urls.py · tests.py
-│   ├── templates/simulador/index.html
-│   └── static/simulador/  css/styles.css · js/app.js · js/charts.js · js/icons.js
-├── README.md
-└── DOCUMENTACION_FLUJO_DE_DATOS.md   recorrido didáctico de la pantalla a SHAP
+dashboard/
+├── data/
+│   ├── air_quality_historical.csv     ← calidad del aire (Open-Meteo Air Quality API, CAMS)
+│   └── meteorologia_diaria.csv        ← meteorología diaria (Open-Meteo, ERA5) exportada por el notebook
+├── ml_models/                         ← exportados en la sección 11 del notebook E2_Capitulo2
+│   ├── modelo_pm2_5.txt               (LightGBM; .json si fuera XGBoost)
+│   ├── modelo_pm10.txt
+│   └── metadatos_modelos.json         (escenario, lista de variables, ubicación)
+├── services/ml.py                     ← limpieza, variables, predicción y TreeSHAP (igual al notebook)
+├── services/meteo.py                  ← descarga y agregación diaria de la meteorología
+├── services/actualizacion.py          ← agrega los días nuevos a los archivos de datos
+├── services/graficos.py               ← gráficos con matplotlib
+├── management/commands/actualizar_datos.py
+├── templates/dashboard/  ·  static/dashboard/estilos.css
+└── tests.py                           ← pruebas automáticas
 ```
 
-## API
+## Instalación (Windows)
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/api/variables/` | Catálogo de variables válidas con estadísticas e importancia |
-| POST | `/api/predecir/` | Predicción + semáforo + recomendaciones + explicación sencilla (requiere token CSRF) |
-
-Ejemplo de cuerpo para `/api/predecir/`:
-
-```json
-{"variables": [
-  {"variable": "pm2_5", "valor": 24.5, "valor_previo": 17},
-  {"variable": "nitrogen_dioxide", "valor": 21}
-]}
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
 ```
 
-## Configuración
+Abrir <http://127.0.0.1:8000/>.
 
-| Variable de entorno | Valor por defecto | Uso |
-|---|---|---|
-| `DJANGO_SECRET_KEY` | clave de desarrollo | **Obligatoria en producción** |
-| `DJANGO_DEBUG` | `1` | `0` en producción |
-| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Dominios permitidos |
-| `AIRE_IMPUTACION` | `iterativa` | `mediana` para imputación simple |
+## Modelos
+
+La aplicación lee `metadatos_modelos.json` para saber qué escenario y qué variables usa, y carga los modelos en el formato nativo de cada librería (`.txt` de LightGBM o `.json` de XGBoost), que no depende de la versión de scikit-learn. Si en lugar de C se exporta el escenario A, la aplicación funciona igual sin meteorología.
+
+## Meteorología del día pronosticado
+
+El escenario C necesita el tiempo del día que se pronostica. La aplicación lo obtiene en este orden:
+
+1. Del archivo `meteorologia_diaria.csv`, si ya tiene esa fecha.
+2. De Open-Meteo: la **API de pronóstico** si la fecha está entre hace 90 días y los próximos 15, o la **API histórica (ERA5)** si es más antigua.
+3. Si no hay conexión, del **promedio histórico del mes**; la página lo advierte porque el pronóstico pierde precisión.
+
+## Actualizar los datos (pronosticar días recientes)
+
+```bash
+python manage.py actualizar_datos
+```
+
+Descarga de Open-Meteo los días que faltan hasta ayer (calidad del aire y meteorología), con la misma agregación diaria del dataset original. Antes de agregarlos compara los últimos 30 días que ya estaban en el archivo con los descargados: si difieren más de 15 % (por ejemplo, por otras coordenadas), no agrega nada. Guarda una copia `.bak` de cada archivo. Después reinicie el servidor: el pronóstico pasará a ser el de hoy.
+
+## Pruebas
+
+```bash
+python manage.py test dashboard
+```
+
+Verifican la depuración (1.296 registros), las variables sin fuga de información (21 del escenario A, 51 del C), la unión con la meteorología sin nulos, la agregación diaria, la elección de la API según la fecha, la actualización de datos, las categorías del ICA, que las páginas respondan y la propiedad aditiva de SHAP.
 
 ## Notas
 
-- Los `.joblib` deben cargarse con las mismas versiones de librerías con que se exportaron (por eso `requirements.txt` fija las de Colab).
-- `shap` es opcional: si no se instala, la app usa las contribuciones nativas de XGBoost, que calculan el mismo TreeSHAP.
-- Los gráficos son SVG propios, sin CDN: la aplicación funciona sin conexión a internet.
-- La limpieza, las 21 variables (`ma3 = media(t−1, t−2, t−3)` con mínimo 2 días, `delta = (t−1) − (t−2)`, `dia_semana` 0 = lunes), los hiperparámetros y el criterio de selección son los del notebook `E2_Capitulo2`. Se reproducen las 1.294 filas, la partición 906/194/194, los P90 (18,35 / 25,56) y el MAE de persistencia (3,125 / 3,242) de la tesis.
+- TreeSHAP se calcula con `predict(..., pred_contrib=True)` de LightGBM (o `pred_contribs=True` de XGBoost), el mismo algoritmo exacto de `shap.TreeExplainer`; la aplicación no requiere la librería `shap`.
+- Herramienta de apoyo a la decisión: no reemplaza los boletines oficiales del SIATA ni del Área Metropolitana del Valle de Aburrá.

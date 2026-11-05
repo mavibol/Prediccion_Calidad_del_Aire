@@ -1,7 +1,7 @@
 """Agrupa las contribuciones SHAP para una explicación accesible."""
 from __future__ import annotations
 
-from .catalogo import VARIABLES
+from .catalogo import CLIMA, VARIABLES
 
 
 def fmt(x: float, dec: int = 1) -> str:
@@ -18,13 +18,14 @@ def explicacion_simple(contribs: list[dict], pred: float, stats: dict,
 
     def factor(c):
         s = sencillo[c["variable"]]
-        meta = VARIABLES[c["variable"]]
+        meta = VARIABLES.get(c["variable"]) or CLIMA[c["variable"]]
         return {"variable": c["variable"],
                 "nombre": f"{meta['etiqueta']} — {meta['nombre_largo']}",
                 "nombre_comun": s["nombre"], "icono": s["icono"],
                 "que_es": s["que_es"], "etiqueta": c["etiqueta"], "unidad": c["unidad"],
                 "valor": c["valor"], "normal": stats[c["variable"]]["mediana"],
                 "origen": c["origen"],
+                "tipo": "clima" if c["variable"] in CLIMA else "aire",
                 "aporte": c["aporte"]}
 
     desfavorables = [factor(c) for c in sorted(contribs, key=lambda c: -c["aporte"])

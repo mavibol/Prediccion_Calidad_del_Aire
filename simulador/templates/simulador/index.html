@@ -113,6 +113,7 @@
               </div>
             </div>
             <div class="alerta-local" id="alerta-local" hidden></div>
+            <div class="clima-manana" id="clima-manana" hidden></div>
 
             <div class="tarjeta">
               <h3>Recomendaciones para tu día</h3>
@@ -174,6 +175,7 @@
           <div class="xai-dialogo__texto">
             <p><strong>De dónde vienen los datos.</strong> El modelo toma las mediciones registradas para hoy en las estaciones de monitoreo de la ciudad. En esta herramienta los valores se ingresan para la simulación y los datos faltantes pueden estimarse; no son lecturas en vivo.</p>
             <p><strong>Qué pronostica.</strong> Compara estas concentraciones con patrones históricos para anticipar el nivel de PM₂.₅ de mañana.</p>
+            <p><strong>El clima de mañana.</strong> Además de tus datos, el modelo usa el pronóstico del tiempo de hoy y de mañana (lluvia, viento, temperatura, nubes) que descarga de Open-Meteo. La lluvia y el viento suelen limpiar el aire; el aire quieto lo ensucia.</p>            
             <p><strong>Por qué algunos factores ayudan y otros suman contaminación.</strong> Las barras azules indican condiciones que favorecen un aire más limpio. Las barras rojas indican emisiones presentes que, aunque estén en niveles seguros o bajos, suman partículas al ambiente en comparación con un aire totalmente puro.</p>
             <p><strong>Qué significa la barra.</strong> Su longitud muestra cuánto peso tuvo cada factor en la decisión del modelo frente a los demás factores mostrados.</p>
           </div>
@@ -184,10 +186,11 @@
   </main>
 </div>
 
+<link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=14">
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
-<script src="{% static 'simulador/js/icons.js' %}"></script>
+<script src="{% static 'simulador/js/icons.js' %}?v=2"></script>
 <script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
-<script src="{% static 'simulador/js/app.js' %}?v=14"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=15"></script>
 </body>
 </html>
