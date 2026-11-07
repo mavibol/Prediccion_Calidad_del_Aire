@@ -32,6 +32,7 @@ def inicio(request):
         "config_front": {
             "api": {
                 "predecir": reverse("simulador:api_predecir"),
+                "resultados": reverse("simulador:api_resultados"),
             },
             "listo": servicio.listo,
             "error_carga": servicio.error_carga,
@@ -68,3 +69,18 @@ def api_predecir(request):
     except Exception:  # noqa: BLE001 - nunca exponer trazas al usuario
         log.exception("Fallo inesperado en la predicción")
         return _error("Ocurrió un error interno al calcular la predicción.", 500)
+
+
+
+@require_GET
+def api_resultados(request):
+    """Resultados de la evaluación en el periodo de prueba (pantalla «Resultados»)."""
+    from .ml import resultados
+    servicio = obtener_servicio()
+    if not servicio.listo:
+        return _error(servicio.error_carga or "Los modelos no están disponibles.", 503)
+    try:
+        return JsonResponse({"ok": True, "resultados": resultados.calcular(servicio)})
+    except Exception:  # noqa: BLE001
+        log.exception("Fallo al calcular los resultados")
+        return _error("No fue posible calcular los resultados del modelo.", 500)

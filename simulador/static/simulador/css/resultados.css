@@ -1,0 +1,116 @@
+/* =====================================================================
+   Pantalla «Resultados del modelo» 
+   ===================================================================== */
+#vista-resultados { --res-obs: #8a97ab; --res-clima: #1f9e8f; display: grid; gap: 16px; }
+#vista-resultados[hidden] { display: none; }
+#res-contenido { display: grid; gap: 16px; }
+#res-contenido[hidden] { display: none; }
+
+/* Selector PM2.5 / PM10 */
+.res-segmento { display: inline-flex; padding: 4px; gap: 4px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 999px; box-shadow: var(--sombra); justify-self: start; }
+.res-segmento__btn { border: 0; background: transparent; border-radius: 999px; padding: 8px 20px; font: inherit; font-weight: 700; color: var(--tinta-2); cursor: pointer; }
+.res-segmento__btn.activo { background: var(--acento); color: #fff; }
+.res-segmento__btn:focus-visible { outline: 3px solid var(--acento-suave); outline-offset: 2px; }
+.res-cargando { color: var(--tinta-2); text-align: center; padding: 40px 20px; }
+
+/* Indicadores clave */
+.res-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.res-kpi { display: grid; gap: 2px; align-content: start; }
+.res-kpi__ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--acento-suave); color: var(--acento); margin-bottom: 8px; }
+.res-kpi__ico .icon { width: 22px; height: 22px; }
+.res-kpi__valor { margin: 0; font-size: clamp(28px, 3vw, 36px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.res-kpi__valor small { font-size: 15px; font-weight: 600; color: var(--tinta-2); }
+.res-kpi__titulo { margin: 4px 0 0; font-weight: 700; }
+.res-kpi__detalle { margin: 0; font-size: 13.5px; color: var(--tinta-3); }
+
+/* Tarjetas */
+.res-panel { display: grid; gap: 10px; align-content: start; }
+.res-panel__cab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; }
+.res-panel__titulo { margin: 0; font-size: 20px; }
+.res-panel__sub { margin: 2px 0 0; color: var(--tinta-2); font-size: 15px; max-width: 62ch; }
+.res-panel__nota { margin: 4px 0 0; font-size: 13.5px; color: var(--tinta-3); }
+.res-subtitulo { margin: 10px 0 0; font-size: 15px; }
+.res-dos { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+
+/* Leyenda y gráfico */
+.res-leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; color: var(--tinta-2); align-self: start; }
+.res-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.res-leyenda i { width: 16px; height: 4px; border-radius: 2px; display: inline-block; }
+.res-leyenda__guion { background: repeating-linear-gradient(90deg, var(--n3) 0 5px, transparent 5px 9px); }
+.res-grafico { position: relative; }
+.res-g { width: 100%; height: auto; display: block; touch-action: pan-y; }
+.res-g__rejilla { stroke: var(--rejilla); stroke-width: 1; }
+.res-g__texto { fill: var(--tinta-3); font-size: 12px; font-family: var(--fuente); }
+.res-g__obs { fill: none; stroke: var(--res-obs); stroke-width: 1.8; stroke-linejoin: round; }
+.res-g__pre { fill: none; stroke: var(--acento); stroke-width: 2.4; stroke-linejoin: round; }
+.res-g__p90 { stroke: var(--n3); stroke-width: 1.4; stroke-dasharray: 5 4; opacity: .8; }
+.res-g__cursor { stroke: var(--tinta-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.res-g__punto--obs { fill: var(--res-obs); stroke: #fff; stroke-width: 2; }
+.res-g__punto--pre { fill: var(--acento); stroke: #fff; stroke-width: 2; }
+.res-g__tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--tinta); color: #fff; border-radius: 10px; padding: 6px 10px; font-size: 13px; display: grid; gap: 1px; pointer-events: none; white-space: nowrap; box-shadow: var(--sombra); }
+.res-g__tip[hidden] { display: none; }
+
+/* Línea de tiempo de la validación temporal */
+.res-tiempo { border-top: 1px solid var(--borde); margin-top: 6px; padding-top: 14px; display: grid; gap: 8px; }
+.res-tiempo__titulo { margin: 0; font-weight: 700; font-size: 15px; }
+.res-tiempo__titulo span { font-weight: 500; color: var(--tinta-3); }
+.res-tiempo__barra { display: flex; gap: 3px; height: 10px; }
+.res-tiempo__tramo { border-radius: 999px; }
+.res-tiempo__tramo--entrenamiento { background: #c6d6ea; }
+.res-tiempo__tramo--validacion { background: #8fb0d9; }
+.res-tiempo__tramo--prueba { background: var(--acento); }
+.res-tiempo__etiquetas { display: flex; gap: 3px; font-size: 13px; }
+.res-tiempo__etq { display: grid; align-content: start; min-width: 0; color: var(--tinta-2); }
+.res-tiempo__etq b { color: var(--tinta); font-size: 13.5px; }
+.res-tiempo__etq--prueba b { color: var(--acento); }
+.res-tiempo__nota { margin: 0; font-size: 13.5px; color: var(--tinta-3); }
+
+/* Grupos (barra apilada) y factores */
+.res-grupos { display: flex; height: 18px; border-radius: 999px; overflow: hidden; gap: 2px; margin-top: 6px; }
+.res-grupos__leyenda { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--tinta-2); }
+.res-grupos__leyenda li { display: inline-flex; align-items: center; gap: 6px; }
+.res-grupos__leyenda i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.res-grupos__leyenda b { color: var(--tinta); }
+.res-factores { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.res-factor { display: grid; grid-template-columns: 30px minmax(0, 1.3fr) minmax(60px, 1fr) 42px; align-items: center; gap: 10px; font-size: 14.5px; }
+.res-factor__ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--acento-suave); color: var(--acento); }
+.res-factor__ico .icon { width: 17px; height: 17px; }
+.res-factor--clima .res-factor__ico { background: #e1f4f1; color: var(--res-clima); }
+.res-factor__nombre { min-width: 0; }
+.res-factor__nombre em { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--res-clima); background: #e1f4f1; border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+.res-factor__barra { height: 8px; background: var(--superficie-2); border-radius: 999px; overflow: hidden; }
+.res-factor__barra i { display: block; height: 100%; background: var(--acento); border-radius: 999px; }
+.res-factor--clima .res-factor__barra i { background: var(--res-clima); }
+.res-factor b { text-align: right; }
+
+/* Escenarios A vs C */
+.res-esc { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 18px; padding: 12px 14px; border: 1px solid var(--borde); border-radius: 14px; }
+.res-esc--elegido { border-color: var(--res-clima); background: #f1faf8; }
+.res-esc__nombre { font-weight: 700; display: grid; }
+.res-esc__nombre small { font-weight: 500; color: var(--tinta-3); }
+.res-esc__dato { display: grid; text-align: right; }
+.res-esc__dato b { font-size: 20px; }
+.res-esc__dato small { font-size: 12px; color: var(--tinta-3); }
+.res-esc__sello { position: absolute; top: -10px; right: 12px; display: inline-flex; align-items: center; gap: 4px; background: var(--res-clima); color: #fff; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 9px; }
+.res-esc__sello .icon { width: 13px; height: 13px; }
+.res-esc__mensaje { margin: 6px 0 0; display: flex; gap: 8px; align-items: flex-start; font-size: 15px; }
+.res-esc__mensaje .icon { width: 20px; height: 20px; color: var(--res-clima); flex: none; margin-top: 1px; }
+
+/* Días críticos */
+.res-alerta { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: start; border-left: 4px solid var(--n1); }
+.res-alerta__ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: #fff5dc; color: #b27d00; }
+.res-alerta p { width: 100%; margin: 6px 0 0; color: var(--tinta-2); }
+.res-alerta b { color: var(--tinta); }
+
+@media (max-width: 960px) { .res-dos { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .res-kpis { grid-template-columns: 1fr; }
+  .res-tiempo__etiquetas { flex-direction: column; }
+  .res-tiempo__etq { flex: none !important; }
+}
+@media (max-width: 420px) {
+  .res-esc { grid-template-columns: 1fr auto; }
+  .res-esc__dato:last-of-type { display: none; }
+  .res-factor { grid-template-columns: 30px minmax(0, 1fr) 42px; }
+  .res-factor__barra { display: none; }
+}

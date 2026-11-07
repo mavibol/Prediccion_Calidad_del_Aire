@@ -169,8 +169,7 @@ class PrediccionTests(BaseConModelos):
         self.assertNotIn("tecnico", d)
         self.assertNotIn("cobertura", d)
         for clave in ("pm2_5", "pm10"):
-            self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel"})
-            self.assertEqual(set(d["explicacion"][clave]), {"simple"})
+            self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel", "orden"})            self.assertEqual(set(d["explicacion"][clave]), {"simple"})
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
         ids_recomendaciones = {r["id"] for r in d["recomendaciones"]}
         self.assertTrue({"running", "sensibles", "ventilacion"}.issubset(ids_recomendaciones))
@@ -305,3 +304,21 @@ class UtilidadesTests(TestCase):
         self.assertEqual(nivel_ica("pm2_5", 151)["id"], "critico")
         self.assertEqual(nivel_ica("pm10", 54)["id"], "sin_contaminacion")
         self.assertEqual(nivel_ica("pm10", 155)["id"], "moderado")
+
+
+class ResultadosTests(BaseConModelos):
+    def test_api_resultados(self):
+        r = Client().get("/api/resultados/")
+        self.assertEqual(r.status_code, 200)
+        d = r.json()["resultados"]
+        self.assertEqual([p["dias"] for p in d["particion"]], [906, 194, 194])
+        for clave in ("pm2_5", "pm10"):
+            c = d["contaminantes"][clave]
+            self.assertEqual(len(c["serie"]["fechas"]), 194)
+            self.assertAlmostEqual(sum(g["peso"] for g in c["grupos"]), 100, places=3)
+            self.assertGreater(c["persistencia"]["mae"], 0)
+
+    def test_pantalla_resultados_en_el_menu(self):
+        r = Client().get("/")
+        self.assertContains(r, 'data-vista="resultados"')
+        self.assertContains(r, 'id="vista-resultados"')

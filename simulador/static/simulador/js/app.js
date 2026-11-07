@@ -53,6 +53,7 @@
     peticion: null,        // AbortController de la petición en curso
     cambiosPendientes: false,
     escena: null,
+    xaiContaminante: null, // "pm2_5" | "pm10" elegido en Factores del Aire
   };
   const NIVELES = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"];
   const TITULOS_NIVEL = ["Aire limpio", "Aire aceptable", "Aire regular", "Aire contaminado", "Aire peligroso"];
@@ -180,7 +181,7 @@
 
   function mostrarVista() {
     const pedida = (location.hash || "#simulador").slice(1);
-    const vista = ["simulador", "explicabilidad"].includes(pedida) ? pedida : "simulador";
+    const vista = ["simulador", "explicabilidad", "resultados"].includes(pedida) ? pedida : "simulador";
     $$(".vista").forEach((s) => (s.hidden = s.id !== "vista-" + vista));
     $$(".nav-item").forEach((a) => {
       a.classList.toggle("activo", a.dataset.vista === vista);
@@ -192,8 +193,17 @@
     document.title = `${sec.dataset.titulo} · Aire Claro`;
     menuMovil(false);
     if (vista === "explicabilidad") pintarPorque();
+    if (vista === "resultados") window.Resultados.mostrar();
     window.scrollTo({ top: 0 });
   }
+  $$(".nav-item").forEach((enlace) => {
+    enlace.addEventListener("click", (evento) => {
+      evento.preventDefault();
+      const hash = `#${enlace.dataset.vista}`;
+      if (location.hash !== hash) history.pushState(null, "", hash);
+      mostrarVista();
+    });
+  });
   window.addEventListener("hashchange", mostrarVista);
 
   function mostrarAviso(msg) { const a = $("#aviso-global"); a.textContent = msg || ""; a.hidden = !msg; }
@@ -382,6 +392,16 @@
     if (estado.filas.size) marcarCambiosPendientes(); else reiniciarResultados();
   }
 
+  // Pronóstico de mañana de los dos contaminantes (el semáforo usa el peor de los dos)
+  function medicionesHTML() {
+    return `<div class="veredicto__mediciones">${[["pm2_5", "PM₂.₅"], ["pm10", "PM₁₀"]].map(([k, etq]) => `
+        <span class="veredicto__medicion" data-contaminante="${k}">
+          <span class="veredicto__etiqueta"><i class="veredicto__punto" aria-hidden="true"></i>${etq} mañana</span>
+          <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+        </span>`).join("")}
+      </div>`;
+  }
+
   function reiniciarResultados() {
     if (estado.peticion) estado.peticion.abort();
     estado.peticion = null;
@@ -394,10 +414,7 @@
         <span class="veredicto__titulo">Tu pronóstico aparecerá aquí</span>
       </span>
       <div class="veredicto__resumen">
-        <span class="veredicto__medicion">
-          <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
-          <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
-        </span>
+        ${medicionesHTML()}
         <span class="veredicto__frase">Agrega datos para conocer el pronóstico.</span>
       </div>`;
     if (!estado.escena) estado.escena = window.Graficos.escena($("#escena"));
@@ -492,7 +509,6 @@
     const ver = $("#veredicto");
     const titulo = TITULOS_NIVEL[a.orden] || a.titulo;
     const clave = a.orden + a.cara;
-    const pronostico = d.predicciones.pm2_5;
     const mensajeNivel = [
       "¡Excelente para actividades al aire libre!",
       "Buenas condiciones para salir.",
@@ -507,17 +523,21 @@
           <span class="veredicto__titulo">${esc(titulo)}</span>
         </span>
         <div class="veredicto__resumen">
-          <span class="veredicto__medicion">
-            <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
-            <strong class="veredicto__valor"><span class="veredicto__numero">${fmt(pronostico.valor, 1)}</span> <span>µg/m³</span></strong>
-          </span>
+          ${medicionesHTML()}
           <span class="veredicto__frase"></span>
         </div>`;
     }
     ver.querySelector(".veredicto__titulo").textContent = titulo;
-    ver.querySelector(".veredicto__numero").textContent = fmt(pronostico.valor, 1);
+    // PM2.5 y PM10 de mañana, cada uno con el color de su categoría del ICA
+    for (const k of ["pm2_5", "pm10"]) {
+      const p = d.predicciones[k];
+      const caja = ver.querySelector(`.veredicto__medicion[data-contaminante="${k}"]`);
+      caja.querySelector(".veredicto__numero").textContent = fmt(p.valor, 1);
+      caja.querySelector(".veredicto__punto").style.background = COLOR_NIVEL[p.orden];
+      caja.querySelector(".veredicto__punto").title = NIVELES[p.orden];
+    }
     const frase = ver.querySelector(".veredicto__frase");
-    frase.textContent = `${mensajeNivel}${a.contaminante === "pm10" ? " La categoría también considera PM₁₀." : ""}`;
+    frase.textContent = mensajeNivel;
     frase.setAttribute("aria-label", `${frase.textContent} ${a.frase}`);
 
     // 5.2 Barra de cinco estados con el nivel pronosticado destacado
@@ -661,23 +681,31 @@
     $("#xai-vacio").hidden = !!d;
     $("#xai-contenido").hidden = !d;
     if (!d) return;
-    const a = d.alerta, s = d.explicacion[a.contaminante].simple;
+    const a = d.alerta;
+    const clave = estado.xaiContaminante || a.contaminante;
+    const s = d.explicacion[clave].simple;
+    const orden = d.predicciones[clave].orden;
+    document.querySelectorAll(".xai-segmento__btn").forEach((b) => {
+      const activo = b.dataset.contaminante === clave;
+      b.classList.toggle("activo", activo);
+      b.setAttribute("aria-pressed", String(activo));
+    });
     const relevantes = [
       ...s.favorables.map((f) => ({ ...f, ayuda: true })),
       ...s.desfavorables.map((f) => ({ ...f, ayuda: false })),
     ].sort((x, y) => Math.abs(y.aporte) - Math.abs(x.aporte));
     const maxAporte = Math.max(...relevantes.map((f) => Math.abs(f.aporte)), 0.01);
-    const objetivo = a.contaminante === "pm2_5" ? "PM₂.₅" : "PM₁₀";
-    const saludables = a.orden === 0;
+    const objetivo = clave === "pm2_5" ? "PM₂.₅" : "PM₁₀";
+    const saludables = orden === 0;
     const factorPrincipal = relevantes[0];
     const influencia = factorPrincipal
       ? `Lo que más pesa es ${factorPrincipal.tipo === "clima" ? "el clima de mañana: " : ""}${factorPrincipal.nombre_comun}, junto con los demás datos del aire.`
       : "El resultado combina los datos ingresados y los estimados automáticamente.";
     const estadoHumano = saludables
       ? "se mantiene en niveles saludables"
-      : a.orden === 1
+      : orden === 1
         ? "se mantiene en un nivel aceptable para la mayoría"
-        : a.orden === 2
+        : orden === 2
           ? "requiere precaución para las personas sensibles"
           : "puede afectar la salud; conviene limitar las actividades al aire libre";
     $("#xai-frase").textContent = `El pronóstico de ${objetivo} (${fmt(s.prediccion, 1)} µg/m³) ${estadoHumano}. ${influencia}`;
@@ -690,6 +718,9 @@
     ].filter(Boolean).join(" ");
 
   }
+
+  document.querySelectorAll(".xai-segmento__btn").forEach((b) =>
+  b.addEventListener("click", () => { estado.xaiContaminante = b.dataset.contaminante; pintarPorque(); }));
 
   /* -----------------------------------------------------------------
      PASO 7 · Arranque

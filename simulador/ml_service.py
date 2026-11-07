@@ -431,6 +431,7 @@ class ServicioML:
             predicciones[clave] = {
                 "valor": round(pred, 2),
                 "nivel": n_ica["id"],
+                "orden": n_ica["orden"],
             }
 
         alerta = self._alerta(predicciones, actual)

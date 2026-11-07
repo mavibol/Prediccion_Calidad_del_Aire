@@ -28,6 +28,9 @@
       <a href="#explicabilidad" class="nav-item" data-vista="explicabilidad">
         <span class="nav-item__icono" data-icon="search" aria-hidden="true"></span><span class="nav-item__txt">Factores del Aire</span>
       </a>
+      <a href="#resultados" class="nav-item" data-vista="resultados">
+        <span class="nav-item__icono" data-icon="chart" aria-hidden="true"></span><span class="nav-item__txt">Resultados</span>
+      </a>
     </nav>
   </aside>
   <div class="velo" id="velo" hidden></div>
@@ -92,10 +95,16 @@
                   <span class="veredicto__titulo">Tu pronóstico aparecerá aquí</span>
                 </span>
                 <div class="veredicto__resumen">
-                  <span class="veredicto__medicion">
-                    <span class="veredicto__etiqueta">PM₂.₅ mañana</span>
-                    <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
-                  </span>
+                  <div class="veredicto__mediciones">
+                    <span class="veredicto__medicion" data-contaminante="pm2_5">
+                      <span class="veredicto__etiqueta"><i class="veredicto__punto" aria-hidden="true"></i>PM₂.₅ mañana</span>
+                      <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+                    </span>
+                    <span class="veredicto__medicion" data-contaminante="pm10">
+                      <span class="veredicto__etiqueta"><i class="veredicto__punto" aria-hidden="true"></i>PM₁₀ mañana</span>
+                      <strong class="veredicto__valor"><span class="veredicto__numero">—</span> <span>µg/m³</span></strong>
+                    </span>
+                  </div>
                   <span class="veredicto__frase">Agrega datos para conocer el pronóstico.</span>
                 </div>
               </div>
@@ -144,6 +153,16 @@
       </div>
     </section>
 
+    <!-- ---------- VISTA 3: RESULTADOS DEL MODELO ---------- -->
+    <section class="vista" id="vista-resultados" hidden data-titulo="Resultados del modelo" data-sub="Así le fue al modelo con días que nunca había visto.">
+      <div class="res-segmento" role="group" aria-label="Contaminante">
+        <button type="button" class="res-segmento__btn activo" data-contaminante="pm2_5" aria-pressed="true">PM₂.₅</button>
+        <button type="button" class="res-segmento__btn" data-contaminante="pm10" aria-pressed="false">PM₁₀</button>
+      </div>
+      <div class="tarjeta res-cargando" id="res-cargando">Calculando los resultados del modelo…</div>
+      <div id="res-contenido" hidden></div>
+    </section>
+
     <!-- ---------- VISTA 2: ¿POR QUÉ? ---------- -->
     <section class="vista" id="vista-explicabilidad" hidden data-titulo="Factores del Aire" data-sub="Conoce qué está moviendo el aire de mañana, para bien o para mal.">
       <div class="tarjeta vacio-grande" id="xai-vacio">
@@ -152,6 +171,10 @@
         <a class="btn btn--primario" href="#simulador">Ir a Mi aire</a>
       </div>
       <div id="xai-contenido" hidden>
+        <div class="xai-segmento" role="group" aria-label="Contaminante que se explica">
+          <button type="button" class="xai-segmento__btn activo" data-contaminante="pm2_5" aria-pressed="true">PM₂.₅</button>
+          <button type="button" class="xai-segmento__btn" data-contaminante="pm10" aria-pressed="false">PM₁₀</button>
+        </div>
         <section class="tarjeta xai-panel">
           <header class="xai-cabecera">
             <div class="xai-cabecera__texto">
@@ -180,7 +203,7 @@
           </header>
           <div class="xai-dialogo__texto">
             <p><strong>De dónde vienen los datos.</strong> El modelo toma las mediciones registradas para hoy en las estaciones de monitoreo de la ciudad. En esta herramienta los valores se ingresan para la simulación y los datos faltantes pueden estimarse; no son lecturas en vivo.</p>
-            <p><strong>Qué pronostica.</strong> Compara estas concentraciones con patrones históricos para anticipar el nivel de PM₂.₅ de mañana.</p>
+            <p><strong>Qué pronostica.</strong> Compara estas concentraciones con patrones históricos para anticipar el nivel de PM₂.₅ y PM₁₀ de mañana.</p>
             <p><strong>El clima de mañana.</strong> Además de tus datos, el modelo usa el pronóstico del tiempo de hoy y de mañana (lluvia, viento, temperatura, nubes) que descarga de Open-Meteo. La lluvia y el viento suelen limpiar el aire; el aire quieto lo ensucia.</p>            
             <p><strong>Por qué algunos factores ayudan y otros suman contaminación.</strong> Las barras azules indican condiciones que favorecen un aire más limpio. Las barras rojas indican emisiones presentes que, aunque estén en niveles seguros o bajos, suman partículas al ambiente en comparación con un aire totalmente puro.</p>
             <p><strong>Qué significa la barra.</strong> Su longitud muestra cuánto peso tuvo cada factor en la decisión del modelo frente a los demás factores mostrados.</p>
@@ -193,10 +216,12 @@
 </div>
 
 <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
+<link rel="stylesheet" href="{% static 'simulador/css/resultados.css' %}?v=2">
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
-<script src="{% static 'simulador/js/icons.js' %}?v=2"></script>
+<script src="{% static 'simulador/js/icons.js' %}?v=3"></script>
 <script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
-<script src="{% static 'simulador/js/app.js' %}?v=17"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=19"></script>
+<script src="{% static 'simulador/js/resultados.js' %}?v=1"></script>
 </body>
 </html>

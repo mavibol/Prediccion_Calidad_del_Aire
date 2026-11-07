@@ -365,3 +365,16 @@ button, input, select { font: inherit; color: inherit; }
 .clima-manana__dato { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
 .clima-manana__dato .icon { width: 20px; height: 20px; color: var(--acento); }
 .clima-manana__fuente { font-size: 13px; color: var(--tinta-2); margin: 8px 0 0; }
+
+/* ---------- PM2.5 y PM10 en Mi aire y en Factores del Aire ---------- */
+.veredicto__mediciones { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; }
+.veredicto__mediciones .veredicto__medicion + .veredicto__medicion { padding-left: 22px; border-left: 1px solid rgba(86, 130, 181, .25); }
+.veredicto__punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--eje); vertical-align: 1px; }
+.xai-segmento { display: inline-flex; padding: 4px; gap: 4px; margin-bottom: 14px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 999px; box-shadow: var(--sombra); }
+.xai-segmento__btn { border: 0; background: transparent; border-radius: 999px; padding: 8px 20px; font: inherit; font-weight: 700; color: var(--tinta-2); cursor: pointer; }
+.xai-segmento__btn.activo { background: var(--acento); color: #fff; }
+.xai-segmento__btn:focus-visible { outline: 3px solid var(--acento-suave); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .veredicto__mediciones { flex-direction: column; gap: 2px; }
+  .veredicto__mediciones .veredicto__medicion + .veredicto__medicion { padding-left: 0; border-left: 0; }
+}
