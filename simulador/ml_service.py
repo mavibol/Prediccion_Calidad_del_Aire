@@ -485,9 +485,12 @@ class ServicioML:
                     "origen": "clima", "aporte": round(por_var[g], 4),
                 })
 
-        return {
-            "simple": explicacion_simple(contribs, pred, self.stats, cat.SENCILLO),
-        }
+        simple = explicacion_simple(contribs, pred, self.stats, cat.SENCILLO)
+        # Para «De un día típico a tu pronóstico»: punto de partida SHAP y aporte del calendario.
+        # Se cumple: base + suma de todos los aportes = pronóstico.
+        simple["base"] = round(pred - float(np.sum(phi)), 4)
+        simple["calendario"] = round(por_var.get("calendario", 0.0), 4)
+        return {"simple": simple}
 
     # ---- 7. Clima de hoy y de mañana (escenario C) -------------------------
     def clima_hoy_y_manana(self) -> dict:

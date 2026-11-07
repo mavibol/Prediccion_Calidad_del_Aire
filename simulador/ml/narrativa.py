@@ -11,7 +11,7 @@ def fmt(x: float, dec: int = 1) -> str:
 
 
 def explicacion_simple(contribs: list[dict], pred: float, stats: dict,
-                       sencillo: dict, max_por_lado: int = 3) -> dict:
+                       sencillo: dict) -> dict:
     """Agrupa los aportes SHAP más relevantes por su dirección."""
     total = sum(abs(c["aporte"]) for c in contribs) or 1.0
     minimo = max(0.15, 0.05 * total)
@@ -28,14 +28,22 @@ def explicacion_simple(contribs: list[dict], pred: float, stats: dict,
                 "tipo": "clima" if c["variable"] in CLIMA else "aire",
                 "aporte": c["aporte"]}
 
-    desfavorables = [factor(c) for c in sorted(contribs, key=lambda c: -c["aporte"])
-                     if c["aporte"] >= minimo][:max_por_lado]
-    favorables = [factor(c) for c in sorted(contribs, key=lambda c: c["aporte"])
-                  if c["aporte"] <= -minimo][:max_por_lado]
+    todos = [factor(c) for c in contribs]
+    influyentes = [f for f in todos if abs(f["aporte"]) >= minimo]
+    desfavorables = sorted(
+        (f for f in influyentes if f["aporte"] > 0),
+        key=lambda f: f["aporte"], reverse=True)
+    favorables = sorted(
+        (f for f in influyentes if f["aporte"] < 0),
+        key=lambda f: f["aporte"])
 
     return {
         "favorables": favorables,
         "desfavorables": desfavorables,
+        "factores": sorted(influyentes, key=lambda f: abs(f["aporte"]), reverse=True),
+        "contribuciones": sorted(todos, key=lambda f: abs(f["aporte"]), reverse=True),
         "prediccion": round(pred, 4),
-        "hay_estimadas": any(f["origen"] == "estimada" for f in desfavorables + favorables),
+        # aporte de TODOS los factores, para comparar PM2.5 y PM10 en la misma tabla
+        "aportes": {c["variable"]: round(c["aporte"], 4) for c in contribs},
+        "hay_estimadas": any(f["origen"] == "estimada" for f in todos),
     }

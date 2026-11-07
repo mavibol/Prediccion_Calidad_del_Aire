@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Aire Claro · ¿Cómo estará el aire?</title>
-  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
+  <title>Aire Claro · Pronóstico de calidad del aire en Medellín</title>
+  <link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=24">
 </head>
 <body>
 <div class="app" id="app">
@@ -17,6 +17,7 @@
         <svg viewBox="0 0 32 32" width="28" height="28"><circle cx="16" cy="16" r="15" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 13c4-3 7 3 11 0s5-2 7-1M7 19c4-3 7 3 11 0s5-2 7-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </span>
       <span class="sidebar__nombre">Aire&nbsp;Claro</span>
+      <span class="sidebar__lugar">Medellín · Valle de Aburrá</span>
     </div>
     <button class="sidebar__colapsar" id="btn-colapsar" type="button" aria-label="Colapsar menú" aria-expanded="true">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -53,7 +54,7 @@
     <div class="aviso" id="aviso-global" role="alert" hidden></div>
 
     <!-- ---------- VISTA 1: MI AIRE (simulador) ---------- -->
-    <section class="vista" id="vista-simulador" data-titulo="¿Cómo estará el aire?" data-sub="Cuéntanos lo que sabes y mira cómo cambia el aire de mañana.">
+    <section class="vista" id="vista-simulador" data-titulo="¿Cómo estará el aire?" data-sub="Pronóstico de PM₂.₅ y PM₁₀ para Medellín y el Valle de Aburrá. Cuéntanos cómo está el aire hoy y mira cómo estará mañana.">
       <div class="rejilla-sim">
 
         <div class="tarjeta panel-datos">
@@ -171,10 +172,6 @@
         <a class="btn btn--primario" href="#simulador">Ir a Mi aire</a>
       </div>
       <div id="xai-contenido" hidden>
-        <div class="xai-segmento" role="group" aria-label="Contaminante que se explica">
-          <button type="button" class="xai-segmento__btn activo" data-contaminante="pm2_5" aria-pressed="true">PM₂.₅</button>
-          <button type="button" class="xai-segmento__btn" data-contaminante="pm10" aria-pressed="false">PM₁₀</button>
-        </div>
         <section class="tarjeta xai-panel">
           <header class="xai-cabecera">
             <div class="xai-cabecera__texto">
@@ -191,7 +188,13 @@
               <span><i class="xai-leyenda__punto xai-leyenda__punto--baja"></i> Baja el pronóstico</span>
             </div>
           </header>
+          <h3 class="xai-subtitulo">Los factores que más influyen</h3>
           <div class="factores-grid" id="col-factores"></div>
+          <section class="suma" aria-labelledby="suma-titulo">
+            <h3 class="suma__titulo" id="suma-titulo">¿Cómo se llega al pronóstico?</h3>
+            <p class="suma__sub">El modelo parte de un día típico en Medellín. Cada grupo de datos le suma o le resta µg/m³, y el total es el pronóstico de mañana.</p>
+            <div class="suma__marco" id="xai-suma"></div>
+          </section>
           <p class="suave centro xai-nota" id="xai-nota"></p>
         </section>
       </div>
@@ -215,13 +218,12 @@
   </main>
 </div>
 
-<link rel="stylesheet" href="{% static 'simulador/css/styles.css' %}?v=16">
 <link rel="stylesheet" href="{% static 'simulador/css/resultados.css' %}?v=2">
 {{ catalogo|json_script:"catalogo-variables" }}
 {{ config_front|json_script:"config-front" }}
 <script src="{% static 'simulador/js/icons.js' %}?v=3"></script>
 <script src="{% static 'simulador/js/charts.js' %}?v=7"></script>
-<script src="{% static 'simulador/js/app.js' %}?v=19"></script>
+<script src="{% static 'simulador/js/app.js' %}?v=25"></script>
 <script src="{% static 'simulador/js/resultados.js' %}?v=1"></script>
 </body>
 </html>

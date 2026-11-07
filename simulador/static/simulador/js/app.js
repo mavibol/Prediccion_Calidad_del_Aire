@@ -53,7 +53,6 @@
     peticion: null,        // AbortController de la petición en curso
     cambiosPendientes: false,
     escena: null,
-    xaiContaminante: null, // "pm2_5" | "pm10" elegido en Factores del Aire
   };
   const NIVELES = ["Limpio", "Aceptable", "Regular", "Contaminado", "Peligroso"];
   const TITULOS_NIVEL = ["Aire limpio", "Aire aceptable", "Aire regular", "Aire contaminado", "Aire peligroso"];
@@ -604,21 +603,39 @@
     return { etiqueta: "Conviene tener cuidado", clase: "factor__salud--cuidado" };
   }
 
-  function tarjetaFactor(f, maxAporte, favorable, esPrincipal) {
-    const peso = Math.min(100, Math.max(15, Math.abs(f.aporte) / maxAporte * 100));
+  function filaAporte(etiqueta, aporte, maxAporte) {
+    if (aporte === null) return "";
+    const ancho = maxAporte ? Math.min(50, Math.abs(aporte) / maxAporte * 50) : 0;
+    const direccion = aporte > 0 ? "sube" : aporte < 0 ? "baja" : "neutro";
+    const descripcion = aporte > 0 ? "Lo sube" : aporte < 0 ? "Lo baja" : "Sin cambio";
+    const cantidad = fmt(Math.abs(aporte), 1);
+    return `<div class="efecto efecto--${direccion}">
+      <b class="efecto__etiqueta">${etiqueta}</b>
+      <span class="efecto__barra" role="img" aria-label="${etiqueta}: ${aporte > 0 ? "sube" : aporte < 0 ? "baja" : "no cambia"} el pronóstico ${cantidad} µg/m³">
+        <i class="efecto__centro"></i><i class="efecto__relleno" style="--efecto-ancho:${ancho}%"></i>
+      </span>
+      <span class="efecto__valor"><b>${aporte > 0 ? "+" : aporte < 0 ? "−" : ""}${cantidad} µg/m³</b><small>${descripcion}</small></span>
+    </div>`;
+  }
+
+  function tarjetaFactor(f, aportes, maxAporte) {
+    const aportesValidos = [aportes.pm2_5, aportes.pm10].filter((aporte) => aporte !== null);
+    const favorable = aportesValidos.reduce((total, aporte) => total + aporte, 0) < 0;
     const unidad = f.unidad === "adim." || f.unidad === "índice" ? "" : ` ${esc(f.unidad)}`;
     const decimalesValor = f.valor < 5 ? 2 : 1;
     const salud = f.tipo === "clima"
       ? { etiqueta: "Clima de mañana", clase: "factor__salud--neutral" }
       : estadoSalud(f.variable, f.valor);
-    const accion = favorable ? "limpieza" : "concentración";
-    const impacto = esPrincipal
-      ? `Aporte principal a la ${accion}`
-      : `${peso >= 40 ? "Aporte moderado" : "Aporte leve"} a la ${accion}`;
     const explicacion = EXPLICACIONES_FACTORES[f.variable] || f.que_es;
     const idAyuda = `factor-ayuda-${f.variable}`;
+    const comparacion = Number(f.valor) > Number(f.normal)
+      ? "por encima"
+      : Number(f.valor) < Number(f.normal) ? "por debajo" : "cerca";
+    const descripcion = f.tipo === "clima"
+      ? `Para mañana, se espera ${f.nombre_comun.toLowerCase()} ${comparacion} de lo habitual.`
+      : `Hoy, el nivel de ${f.nombre_comun.toLowerCase()} está ${comparacion} de lo normal.`;
     return `<article class="factor ${favorable ? "factor--favorable" : "factor--desfavorable"} ${f.origen === "estimada" ? "factor--estimada" : ""}"
-              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${salud.etiqueta}. ${impacto}.">
+              aria-label="${esc(f.nombre_comun)} (${esc(f.etiqueta)}): ${fmt(f.valor, decimalesValor)}${unidad}, ${salud.etiqueta}.">
       <span class="factor__ico" aria-hidden="true">${icono(f.icono, "icon")}</span>
       <div class="factor__encabezado">
         <h3 class="factor__nombre">${esc(f.nombre_comun)}</h3>
@@ -634,12 +651,57 @@
         <strong class="factor__valor">${fmt(f.valor, decimalesValor)}${unidad}</strong>
         <span class="factor__salud ${salud.clase}">${salud.etiqueta}</span>
       </div>
-      <div class="aporte__pista" role="progressbar" aria-label="Peso relativo del factor" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(peso)}">
-        <span style="width:${peso}%"></span>
+      <p class="factor__porque">${esc(descripcion)}</p>
+      <div class="factor__efectos">
+        ${filaAporte("PM₂.₅", aportes.pm2_5, maxAporte)}
+        ${filaAporte("PM₁₀", aportes.pm10, maxAporte)}
       </div>
-      <p class="factor__impacto">${impacto}</p>
       ${f.origen === "estimada" ? `<span class="factor__estimada">Dato estimado</span>` : "" }
     </article>`;
+  }
+
+  /* «¿Cómo se llega al pronóstico?»: tabla con PM2.5 y PM10 lado a lado.
+     Día típico + aporte SHAP de cada grupo de datos = pronóstico (se cumple exactamente). */
+  const GRUPOS_SUMA = [
+    { nombre: "Partículas de hoy", detalle: "Hollín fino y polvo en el aire", variables: ["pm2_5", "pm10"] },
+    { nombre: "Otros gases de hoy", detalle: "Tráfico, motores, diésel e industria, ozono",
+      variables: ["nitrogen_dioxide", "carbon_monoxide", "sulphur_dioxide", "ozone"] },
+    { nombre: "Polvo, bruma y sol", detalle: "Polvo del desierto, aerosoles e índice UV",
+      variables: ["dust", "aerosol_optical_depth", "uv_index"] },
+    { nombre: "Clima de mañana", detalle: "Viento, lluvia, temperatura, humedad, nubes, presión",
+      variables: ["viento", "lluvia", "temperatura", "humedad", "nubes", "presion", "capa_mezcla"] },
+    { nombre: "Época del año", detalle: "Mes y día de la semana", variables: ["calendario"] },
+  ];
+
+  function pintarSuma(d) {
+    const s = { pm2_5: d.explicacion.pm2_5.simple, pm10: d.explicacion.pm10.simple };
+    const aporte = (k, v) => (v === "calendario" ? Number(s[k].calendario) || 0 : Number(s[k].aportes?.[v]) || 0);
+    const filas = GRUPOS_SUMA.map((g) => ({
+      ...g,
+      valores: Object.fromEntries(["pm2_5", "pm10"].map((k) => [k, g.variables.reduce((t, v) => t + aporte(k, v), 0)])),
+    }));
+    const max = Math.max(0.1, ...filas.flatMap((f) => [Math.abs(f.valores.pm2_5), Math.abs(f.valores.pm10)]));
+    const celda = (x) => {
+      const dir = Math.abs(x) < 0.05 ? "neutro" : x > 0 ? "sube" : "baja";
+      const ancho = Math.min(50, Math.abs(x) / max * 50);
+      return `<td class="suma__celda suma__celda--${dir}">
+          <span class="suma__barra" aria-hidden="true"><i style="width:${ancho}%"></i></span>
+          <b>${dir === "neutro" ? "" : x > 0 ? "+" : "−"}${fmt(Math.abs(x), 1)}</b>
+        </td>`;
+    };
+    $("#xai-suma").innerHTML = `<table class="suma__tabla">
+        <caption class="sr-only">Pronóstico de mañana como suma de aportes, en µg/m³</caption>
+        <thead><tr><th scope="col">En µg/m³</th><th scope="col">PM₂.₅</th><th scope="col">PM₁₀</th></tr></thead>
+        <tbody>
+          <tr class="suma__base"><th scope="row">Día típico en Medellín<small>Punto de partida del modelo</small></th>
+            <td><b>${fmt(s.pm2_5.base, 1)}</b></td><td><b>${fmt(s.pm10.base, 1)}</b></td></tr>
+          ${filas.map((f) => `<tr><th scope="row">${esc(f.nombre)}<small>${esc(f.detalle)}</small></th>
+            ${celda(f.valores.pm2_5)}${celda(f.valores.pm10)}</tr>`).join("")}
+        </tbody>
+        <tfoot><tr><th scope="row">Pronóstico de mañana</th>
+          <td><b>${fmt(s.pm2_5.prediccion, 1)}</b> <small>µg/m³</small></td>
+          <td><b>${fmt(s.pm10.prediccion, 1)}</b> <small>µg/m³</small></td></tr></tfoot>
+      </table>`;
   }
 
   const dialogoAyuda = $("#xai-dialogo");
@@ -681,46 +743,65 @@
     $("#xai-vacio").hidden = !!d;
     $("#xai-contenido").hidden = !d;
     if (!d) return;
-    const a = d.alerta;
-    const clave = estado.xaiContaminante || a.contaminante;
-    const s = d.explicacion[clave].simple;
-    const orden = d.predicciones[clave].orden;
-    document.querySelectorAll(".xai-segmento__btn").forEach((b) => {
-      const activo = b.dataset.contaminante === clave;
-      b.classList.toggle("activo", activo);
-      b.setAttribute("aria-pressed", String(activo));
+    const s25 = d.explicacion.pm2_5.simple;
+    const s10 = d.explicacion.pm10.simple;
+    const obtenerFactores = (simple) => Array.isArray(simple.factores)
+      ? simple.factores
+      : [...(simple.favorables || []), ...(simple.desfavorables || [])]
+        .filter((factor, indice, lista) =>
+          lista.findIndex((otro) => otro.variable === factor.variable) === indice)
+        .sort((a, b) => Math.abs(b.aporte) - Math.abs(a.aporte));
+    const factores25 = obtenerFactores(s25);
+    const factores10 = obtenerFactores(s10);
+    const porVariable25 = new Map(factores25.map((factor) => [factor.variable, factor.aporte]));
+    const porVariable10 = new Map(factores10.map((factor) => [factor.variable, factor.aporte]));
+    const factores = new Map();
+    factores25.forEach((f) => factores.set(f.variable, { ...f, aportes: {
+      pm2_5: porVariable25.get(f.variable) ?? null,
+      pm10: porVariable10.get(f.variable) ?? null,
+    } }));
+    factores10.forEach((f) => {
+      const existente = factores.get(f.variable);
+      if (!existente) factores.set(f.variable, { ...f, aportes: {
+        pm2_5: porVariable25.get(f.variable) ?? null,
+        pm10: porVariable10.get(f.variable) ?? null,
+      } });
     });
-    const relevantes = [
-      ...s.favorables.map((f) => ({ ...f, ayuda: true })),
-      ...s.desfavorables.map((f) => ({ ...f, ayuda: false })),
-    ].sort((x, y) => Math.abs(y.aporte) - Math.abs(x.aporte));
-    const maxAporte = Math.max(...relevantes.map((f) => Math.abs(f.aporte)), 0.01);
-    const objetivo = clave === "pm2_5" ? "PM₂.₅" : "PM₁₀";
-    const saludables = orden === 0;
-    const factorPrincipal = relevantes[0];
-    const influencia = factorPrincipal
-      ? `Lo que más pesa es ${factorPrincipal.tipo === "clima" ? "el clima de mañana: " : ""}${factorPrincipal.nombre_comun}, junto con los demás datos del aire.`
-      : "El resultado combina los datos ingresados y los estimados automáticamente.";
-    const estadoHumano = saludables
-      ? "se mantiene en niveles saludables"
-      : orden === 1
-        ? "se mantiene en un nivel aceptable para la mayoría"
-        : orden === 2
-          ? "requiere precaución para las personas sensibles"
-          : "puede afectar la salud; conviene limitar las actividades al aire libre";
-    $("#xai-frase").textContent = `El pronóstico de ${objetivo} (${fmt(s.prediccion, 1)} µg/m³) ${estadoHumano}. ${influencia}`;
+    const relevantes = [...factores.values()]
+      .sort((a, b) => Math.max(Math.abs(b.aportes.pm2_5), Math.abs(b.aportes.pm10))
+        - Math.max(Math.abs(a.aportes.pm2_5), Math.abs(a.aportes.pm10)))
+      ;
+    const maxAporte = Math.max(0, ...relevantes.flatMap((f) =>
+      [f.aportes.pm2_5, f.aportes.pm10]
+        .filter((aporte) => aporte !== null)
+        .map(Math.abs)));
+    const estadoNivel = ["está en niveles saludables", "está en niveles aceptables",
+      "requiere precaución para las personas sensibles", "puede afectar la salud",
+      "puede afectar gravemente la salud"];
+    const orden25 = d.predicciones.pm2_5.orden;
+    const orden10 = d.predicciones.pm10.orden;
+    const v25 = `${fmt(s25.prediccion, 1)} µg/m³`, v10 = `${fmt(s10.prediccion, 1)} µg/m³`;
+    const resumen = orden25 === orden10
+      ? `Mañana, el PM₂.₅ (${v25}) y el PM₁₀ (${v10}) ${["se mantienen en niveles saludables",
+        "se mantienen en niveles aceptables para la mayoría", "requieren precaución para las personas sensibles",
+        "pueden afectar la salud", "pueden afectar gravemente la salud"][orden25]}.`
+      : `Mañana, el PM₂.₅ (${v25}) ${estadoNivel[orden25]} y el PM₁₀ (${v10}) ${estadoNivel[orden10].replace(/^está /, "")}.`;
+    const principal25 = factores25[0];
+    const principal10 = factores10[0];
+    const nombrePrincipal = (factor) => factor
+      ? `${factor.tipo === "clima" ? "el clima de mañana (" : ""}${factor.nombre_comun}${factor.tipo === "clima" ? ")" : ""}`
+            : "los datos disponibles";
+    $("#xai-frase").textContent = `${resumen} Lo que más influye es ${nombrePrincipal(principal25)} en el PM₂.₅ y ${nombrePrincipal(principal10)} en el PM₁₀.`;
+    pintarSuma(d);
     $("#col-factores").innerHTML = relevantes.length
-      ? relevantes.map((f, i) => tarjetaFactor(f, maxAporte, f.ayuda, i === 0)).join("")
+      ? relevantes.map((f) => tarjetaFactor(f, f.aportes, maxAporte)).join("")
       : `<div class="columna__vacia">No hay factores relevantes para mostrar.</div>`;
     $("#xai-nota").textContent = [
-      s.hay_estimadas ? "Los datos con la etiqueta «Estimado automáticamente» se completaron porque no fueron ingresados." : "",
+      s25.hay_estimadas || s10.hay_estimadas ? "Los datos con la etiqueta «Estimado automáticamente» se completaron porque no fueron ingresados." : "",
       "La explicación resume patrones aprendidos por el modelo; no demuestra una causa directa.",
     ].filter(Boolean).join(" ");
 
   }
-
-  document.querySelectorAll(".xai-segmento__btn").forEach((b) =>
-  b.addEventListener("click", () => { estado.xaiContaminante = b.dataset.contaminante; pintarPorque(); }));
 
   /* -----------------------------------------------------------------
      PASO 7 · Arranque

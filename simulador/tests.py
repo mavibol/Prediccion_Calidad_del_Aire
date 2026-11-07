@@ -169,7 +169,8 @@ class PrediccionTests(BaseConModelos):
         self.assertNotIn("tecnico", d)
         self.assertNotIn("cobertura", d)
         for clave in ("pm2_5", "pm10"):
-            self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel", "orden"})            self.assertEqual(set(d["explicacion"][clave]), {"simple"})
+            self.assertEqual(set(d["predicciones"][clave]), {"valor", "nivel", "orden"})
+        self.assertEqual(set(d["explicacion"][clave]), {"simple"})
         self.assertEqual(len(d["recomendaciones"]), len(cat.ACTIVIDADES))
         ids_recomendaciones = {r["id"] for r in d["recomendaciones"]}
         self.assertTrue({"running", "sensibles", "ventilacion"}.issubset(ids_recomendaciones))
@@ -181,8 +182,6 @@ class PrediccionTests(BaseConModelos):
         for k in ("cara", "titulo", "frase"):
             self.assertTrue(a[k])
         s = d["explicacion"][a["contaminante"]]["simple"]
-        self.assertLessEqual(len(s["desfavorables"]), 3)
-        self.assertLessEqual(len(s["favorables"]), 3)
         self.assertAlmostEqual(
             s["prediccion"], d["predicciones"][a["contaminante"]]["valor"], delta=0.011)
         self.assertTrue(all(f["aporte"] >= 0 for f in s["desfavorables"]))
@@ -191,6 +190,26 @@ class PrediccionTests(BaseConModelos):
             if f["tipo"] == "aire":
                 self.assertIn("µg/m³", f["unidad"])
             self.assertIn("—", f["nombre"])
+        for clave in ("pm2_5", "pm10"):
+            explicacion = d["explicacion"][clave]["simple"]
+            self.assertTrue(explicacion["factores"])
+            self.assertEqual(
+                len({f["variable"] for f in explicacion["factores"]}),
+                len(explicacion["factores"]),
+            )
+            self.assertAlmostEqual(
+                explicacion["base"] + sum(f["aporte"] for f in explicacion["contribuciones"])
+                + explicacion["calendario"],
+                explicacion["prediccion"],
+                delta=0.001,
+            )
+            total = sum(abs(f["aporte"]) for f in explicacion["contribuciones"]) or 1.0
+            minimo = max(0.15, 0.05 * total)
+            self.assertTrue(all(abs(f["aporte"]) >= minimo for f in explicacion["factores"]))
+            self.assertEqual(
+                {f["variable"] for f in explicacion["factores"]},
+                {f["variable"] for f in explicacion["favorables"] + explicacion["desfavorables"]},
+            )
         self.assertTrue(all(len(r["corto"].split()) <= 6 for r in d["recomendaciones"]))
 
     def test_todas_las_variables_evitan_estimaciones(self):
