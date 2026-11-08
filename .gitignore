@@ -4,3 +4,4 @@ __pycache__/
 db.sqlite3
 staticfiles/
 ml_models/*.joblib
+.env

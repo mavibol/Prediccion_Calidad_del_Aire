@@ -8,3 +8,5 @@ lightgbm==4.6.0
 joblib>=1.4
 # Opcional: si falla su instalación, la app usa las contribuciones nativas de XGBoost
 shap==0.54.1
+# Servidor de producción para el VPS (no se instala en Windows)
+gunicorn==23.0.0; sys_platform != "win32"

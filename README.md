@@ -79,6 +79,15 @@ Calidad del aire/
 └── DOCUMENTACION_FLUJO_DE_DATOS.md   recorrido didáctico de la pantalla a SHAP
 ```
 
+## Despliegue en servidor
+
+La aplicación está dockerizada (`Dockerfile` y `docker-compose.yml`, con Gunicorn y Nginx). Ver [DESPLIEGUE.md](DESPLIEGUE.md):
+
+```bash
+cp .env.example .env    # completar la clave y la IP
+docker compose up -d --build
+```
+
 ## API
 
 | Método | Ruta | Descripción |
@@ -104,6 +113,8 @@ La respuesta incluye el bloque `clima`, con `disponible`, `fecha`, `fuente` y `r
 | `DJANGO_SECRET_KEY` | clave de desarrollo | **Obligatoria en producción** |
 | `DJANGO_DEBUG` | `1` | `0` en producción |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Dominios permitidos |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | vacío | Orígenes con esquema, p. ej. `https://midominio.com` |
+| `DJANGO_HTTPS` | `0` | `1` cuando el sitio tiene certificado |
 | `AIRE_IMPUTACION` | `iterativa` | `mediana` para imputación simple |
 | `AIRE_METEO_EN_LINEA` | `1` | `0` para no consultar Open-Meteo y usar el clima típico del mes |
 
