@@ -1,9 +1,9 @@
 /* =====================================================================
    Pantalla «Resultados del modelo» 
    ===================================================================== */
-#vista-resultados { --res-obs: #8a97ab; --res-clima: #1f9e8f; display: grid; gap: 16px; }
+#vista-resultados { --res-obs: #8a97ab; --res-clima: #1f9e8f; display: grid; gap: 12px; max-width: 1120px; margin-inline: auto; }
 #vista-resultados[hidden] { display: none; }
-#res-contenido { display: grid; gap: 16px; }
+#res-contenido { display: grid; gap: 12px; }
 #res-contenido[hidden] { display: none; }
 
 /* Selector PM2.5 / PM10 */
@@ -14,23 +14,24 @@
 .res-cargando { color: var(--tinta-2); text-align: center; padding: 40px 20px; }
 
 /* Indicadores clave */
-.res-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.res-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .res-kpi { display: grid; gap: 2px; align-content: start; }
-.res-kpi__ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--acento-suave); color: var(--acento); margin-bottom: 8px; }
-.res-kpi__ico .icon { width: 22px; height: 22px; }
-.res-kpi__valor { margin: 0; font-size: clamp(28px, 3vw, 36px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.res-kpi__ico { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: var(--acento-suave); color: var(--acento); margin-bottom: 6px; }
+.res-kpi__ico .icon { width: 20px; height: 20px; }
+.res-kpi__valor { margin: 0; font-size: clamp(24px, 2.5vw, 30px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
 .res-kpi__valor small { font-size: 15px; font-weight: 600; color: var(--tinta-2); }
 .res-kpi__titulo { margin: 4px 0 0; font-weight: 700; }
 .res-kpi__detalle { margin: 0; font-size: 13.5px; color: var(--tinta-3); }
 
 /* Tarjetas */
-.res-panel { display: grid; gap: 10px; align-content: start; }
+.res-panel { display: grid; gap: 8px; align-content: start; padding: 16px; }
+.res-kpi, .res-alerta { padding: 16px; }
 .res-panel__cab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; }
-.res-panel__titulo { margin: 0; font-size: 20px; }
-.res-panel__sub { margin: 2px 0 0; color: var(--tinta-2); font-size: 15px; max-width: 62ch; }
+.res-panel__titulo { margin: 0; font-size: 18px; }
+.res-panel__sub { margin: 2px 0 0; color: var(--tinta-2); font-size: 14px; }
 .res-panel__nota { margin: 4px 0 0; font-size: 13.5px; color: var(--tinta-3); }
 .res-subtitulo { margin: 10px 0 0; font-size: 15px; }
-.res-dos { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+.res-dos { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; }
 
 /* Leyenda y gráfico */
 .res-leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; color: var(--tinta-2); align-self: start; }
