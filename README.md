@@ -8,8 +8,11 @@ Plataforma Django para simular y anticipar la calidad del aire en el Valle de Ab
 |---|---|
 | **Mi aire** (simulador) | Agrega variables e introduce sus valores. Cada campo muestra un rango amplio de valores plausibles y el servidor rechaza los que estén fuera de esos límites. El visualizador presenta el estado, el pronóstico de PM₂.₅, una escala de calidad y la tarjeta **«Clima de mañana»** (lluvia, viento, temperatura y nubes usados por el modelo). Tres tarjetas resumen recomendaciones para deporte, grupos sensibles y el hogar. |
 | **Factores del Aire** (explicabilidad) | Una explicación narrativa de los factores con mayor influencia, seguida de los que ayudan a limpiar el aire y los que pueden aumentar la contaminación. Incluye los **factores de clima** (lluvia, viento, temperatura, humedad, nubes y sol, presión, altura de mezcla). La interpretación no implica causalidad. |
+| **Resultados** | Evaluación retrospectiva de PM₂.₅ o PM₁₀ en el periodo de prueba: error del modelo, comparación con repetir el valor del día anterior, gráfico de valores medidos y pronosticados, partición cronológica, factores globales asociados a la predicción y análisis de días críticos. También compara los escenarios sin clima y con clima en validación. |
 
 El formulario ofrece las nueve variables de calidad del aire que alimentan el modelo: PM₁₀, PM₂.₅, SO₂, NO₂, O₃, CO, AOD, índice UV y polvo. Las variables meteorológicas no se escriben: se descargan del pronóstico de Open-Meteo.
+
+La pantalla **Resultados** es distinta del pronóstico interactivo: resume cómo se comportó el modelo con días reservados para evaluación. El selector permite cambiar entre PM₂.₅ y PM₁₀. Las métricas del periodo de prueba se calculan con las predicciones de los modelos desplegados; la comparación de escenarios A y C proviene de los resultados de validación del notebook.
 
 ## Modelo desplegado
 
@@ -38,7 +41,7 @@ Se recomienda **Python 3.12 o 3.13**, porque `requirements.txt` fija las version
 3. Ejecuten:
 
 ```bash
-python manage.py test simulador    # 19 pruebas
+python manage.py test simulador
 python manage.py runserver
 ```
 
@@ -71,10 +74,13 @@ Calidad del aire/
 │   │   ├── datos.py             limpieza + ingeniería de variables (igual que el notebook)
 │   │   ├── meteo.py             descarga y agregación diaria del pronóstico del clima
 │   │   ├── explicadores.py      shap -> contribuciones nativas de LightGBM -> TreeSHAP propio
-│   │   └── narrativa.py         SHAP -> factores para explicar en lenguaje claro
+│   │   ├── narrativa.py         SHAP -> factores para explicar en lenguaje claro
+│   │   └── resultados.py        métricas de prueba, factores globales y días críticos
 │   ├── views.py · urls.py · tests.py
 │   ├── templates/simulador/index.html
-│   └── static/simulador/  css/styles.css · js/app.js · js/charts.js · js/icons.js
+│   └── static/simulador/
+│       ├── css/styles.css · css/resultados.css
+│       └── js/app.js · js/resultados.js · js/charts.js · js/icons.js
 ├── README.md
 └── DOCUMENTACION_FLUJO_DE_DATOS.md   recorrido didáctico de la pantalla a SHAP
 ```
@@ -85,6 +91,9 @@ Calidad del aire/
 |---|---|---|
 | GET | `/api/variables/` | Catálogo de variables válidas con estadísticas e importancia |
 | POST | `/api/predecir/` | Predicción + semáforo + recomendaciones + clima de mañana + explicación sencilla (requiere token CSRF) |
+| GET | `/api/resultados/` | Métricas, series observadas y pronosticadas, factores globales y días críticos para PM₂.₅ y PM₁₀ |
+
+`/api/resultados/` requiere que los modelos estén disponibles. Calcula la evaluación sobre la partición cronológica de prueba y conserva el resultado en memoria durante la vida del servicio. La interfaz solicita los datos al entrar en la pantalla y permite alternar el contaminante sin repetir la petición.
 
 Ejemplo de cuerpo para `/api/predecir/`:
 

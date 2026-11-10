@@ -182,8 +182,10 @@
         <div>
           <h2 class="res-panel__titulo">En los días más contaminados</h2>
           <p>Hubo <b>${k.dias} días</b> con ${c.etiqueta} por encima de ${num(k.umbral)} µg/m³ (el 10 % más alto del entrenamiento). En ellos el error sube a <b>${num(k.mae)} µg/m³</b> y el pronóstico se queda
-            ${k.sesgo < 0 ? "corto" : "alto"} en ${num(Math.abs(k.sesgo))} µg/m³ en promedio: el modelo anticipa la subida, pero no toda su magnitud.${pocos}</p>
-        </div>
+            ${k.sesgo < 0 ? "corto" : "alto"} en ${num(Math.abs(k.sesgo))} µg/m³ en promedio. ${
+              k.mae >= k.mae_persistencia
+                ? `En estos días el modelo no es mejor que repetir el dato de ayer (error de ${num(k.mae_persistencia)} µg/m³): es la principal limitación del pronóstico.`
+                : `Repetir el dato de ayer se equivoca ${num(k.mae_persistencia)} µg/m³, así que el modelo mejora algo, pero no alcanza toda la magnitud de los picos.`}${pocos}</p>        </div>
       </section>`;
   }
 

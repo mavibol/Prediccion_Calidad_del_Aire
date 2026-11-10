@@ -158,9 +158,24 @@ La API entrega una explicación resumida (`simple`, generada por `explicacion_si
 - **Visualizador de Mi aire** (`Graficos.escena`): un fondo degradado y sutil cambia de tono según el nivel, sin siluetas de edificios. El estado se acompaña con iconos SVG y texto, nunca solo con color; también presenta el pronóstico de PM₂.₅ y una escala horizontal de calidad.
 - **Recomendaciones para tu día**: muestra tres tarjetas legibles de deporte, grupos sensibles y hogar a partir de las recomendaciones del nivel pronosticado.
 - **Factores del Aire**: presenta primero un resumen narrativo de los factores con mayor influencia SHAP y debajo los factores favorables y desfavorables, con sus valores medidos o estimados y una barra de influencia relativa. La interpretación es relativa al modelo y no implica causalidad.
+- **Resultados**: una pantalla de evaluación independiente del simulador. El selector permite consultar PM₂.₅ o PM₁₀ y muestra el desempeño en días de prueba que no se usaron para entrenar ni seleccionar el modelo, junto con el gráfico medido/pronosticado, la partición temporal, los factores globales y los días críticos. La comparación de escenarios con y sin clima se reporta con los resultados de validación.
 - **Estado de cada dato** («por encima de lo saludable», «más alto de lo normal», «normal», «más bajo de lo normal») con la guía OMS y los percentiles 10 y 90 de la ciudad. Si el estado contradice el efecto (p. ej., un valor bajo que el modelo asocia con más contaminación), se omite el estado para no confundir.
 - **Completitud**: muestra la cantidad y el porcentaje de variables ingresadas sobre las nueve disponibles.
 - **Estimaciones**: identifica los valores que el sistema completó automáticamente porque no fueron ingresados.
+
+## 14. Pantalla «Resultados» y evaluación del modelo
+
+Esta pantalla no reutiliza la predicción personalizada de «Mi aire»: evalúa los modelos desplegados sobre la partición cronológica de prueba. Al abrir la vista, `resultados.js` solicita `GET /api/resultados/`; la respuesta incluye los resultados de los dos contaminantes. El selector PM₂.₅/PM₁₀ vuelve a dibujar la vista con los datos ya cargados, sin hacer otra petición.
+
+El endpoint (`views.api_resultados`) delega en `simulador/ml/resultados.py`, que vuelve a preparar las variables históricas y divide los datos en entrenamiento, validación y prueba con `particion_cronologica()`. Para cada contaminante:
+
+- Calcula las predicciones del modelo desplegado en los días de prueba y sus métricas MAE, RMSE y R².
+- Calcula las mismas métricas para una referencia de persistencia (repetir el valor del día anterior) y el porcentaje de mejora en MAE.
+- Obtiene la importancia global como el promedio de los valores absolutos SHAP en el conjunto de prueba; agrega las variables derivadas en factores reconocibles y grupos generales.
+- Identifica los días cuyo valor medido supera el P90 definido con el entrenamiento. Para esos días presenta cantidad, error, sesgo promedio y comparación con persistencia.
+- Incluye la comparación de los escenarios A (sin meteorología) y C (con meteorología) a partir de resultados de **validación** guardados desde el notebook. Esta comparación no se recalcula con el periodo de prueba.
+
+En la interfaz, el gráfico SVG permite inspeccionar con el puntero la fecha y los valores medido y pronosticado. Las tarjetas de métricas, el gráfico, la partición temporal, los factores y el análisis de días críticos se adaptan al contaminante seleccionado. Los datos se calculan una sola vez y se guardan en memoria en el servicio mientras este siga activo.
 
 ---
 
