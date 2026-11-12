@@ -85,6 +85,22 @@ class EscenarioCTests(BaseConModelos):
         lluvia = next(x for x in d["clima"]["resumen"] if x["id"] == "lluvia")
         self.assertEqual(lluvia["valor"], 30.0)
 
+    def test_usa_la_fecha_real_de_manana(self):
+        from .ml_service import obtener_servicio
+        s = obtener_servicio()
+        hoy = {c: s.clima_mes[1][c] for c in meteo.COLS_METEO}
+        aportes = {}
+        try:
+            s.meteo_en_linea = True
+            for fecha in ("2026-03-10", "2026-10-13"):
+                s._cache_meteo = None
+                with mock.patch("simulador.ml_service.descargar_hoy_y_manana", return_value=(hoy, hoy, fecha)):
+                    d = self.predecir([{"variable": "pm2_5", "valor": 20}]).json()
+                aportes[fecha] = d["explicacion"]["pm2_5"]["simple"]["calendario"]
+        finally:
+            s.meteo_en_linea, s._cache_meteo = False, None
+        self.assertNotEqual(aportes["2026-03-10"], aportes["2026-10-13"])
+
     def test_agregacion_diaria_igual_al_notebook(self):
         import pandas as pd
         t = pd.date_range("2026-01-01", periods=48, freq="h")

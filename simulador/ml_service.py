@@ -3,12 +3,12 @@ Pipeline de inferencia del simulador «Aire Claro».
 
 Flujo de una predicción (ver DOCUMENTACION_FLUJO_DE_DATOS.md):
 
-  payload JSON ──► validar() ──► imputar() ──► construir 84 filas ──► modelo ──► SHAP
-  [{variable,      números,      variables     (12 meses × 7 días:     predicción  contribución
-    valor,         rangos,       ausentes      la simulación no        promedio    promedio por
-    valor_previo}] duplicados    estimadas     depende de la fecha)                variable
-                                                                          │
-                                         semáforo + recomendaciones ◄─────┘──► narrativa
+  payload JSON ──► validar() ──► imputar() ──► fila de mañana ──► modelo ──► SHAP
+  [{variable,      números,      variables     (mes y día de la      predicción  contribución
+    valor,         rangos,       ausentes      semana de la fecha    del día     por variable
+    valor_previo}] duplicados    estimadas     real de mañana)
+                                                        │
+                       semáforo + recomendaciones ◄─────┘──► narrativa
 
 El servicio es un *singleton* perezoso: se carga una vez por proceso
 (primera petición) y queda en memoria.
@@ -20,6 +20,7 @@ import logging
 import math
 import threading
 import time
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,9 +41,7 @@ log = logging.getLogger(__name__)
 
 TIENE_PREVIO = {"pm2_5", "pm10", "carbon_monoxide", "nitrogen_dioxide",
                 "sulphur_dioxide", "ozone"}   # variables con lag2 en el modelo
-MESES = range(1, 13)
-DIAS = range(7)
-
+HORA_COLOMBIA = timezone(timedelta(hours=-5))   # Colombia no tiene horario de verano
 
 class ErrorValidacion(ValueError):
     """Error de entrada del usuario (se responde con HTTP 400)."""
@@ -390,18 +389,24 @@ class ServicioML:
         actual, previo, avisos = self.validar(payload)
         completo, estimadas = self.imputar(actual)
 
-        # La simulación es agnóstica al tiempo: se evalúa el mismo estado del
-        # aire en las 84 combinaciones mes × día de la semana y se promedia.
-        # Como SHAP es aditivo, el promedio de las explicaciones explica el
-                # promedio de las predicciones.
+        # Se pronostica el día de mañana, así que el mes y el día de la semana son los de
+        # su fecha real: la del pronóstico de Open-Meteo o, sin conexión, la de Colombia.
         # Escenario C: el clima de hoy y de mañana sale del pronóstico de Open-Meteo;
-        # sin conexión se usa el promedio histórico de cada mes.
+        # sin conexión se usa el promedio histórico del mes de cada día.
         clima = self.clima_hoy_y_manana() if self.usa_meteo else None
-        filas = []
-        for m in MESES:
-            hoy, manana = (clima["hoy"], clima["manana"]) if clima and clima["disponible"] else \
-                          (self.clima_mes[m], self.clima_mes[m]) if clima else (None, None)
-            filas += [fila_desde_lecturas(completo, previo, m, d, manana, hoy) for d in DIAS]
+        if clima and clima["disponible"]:
+            fecha_manana = date.fromisoformat(clima["fecha"])
+        else:
+            fecha_manana = datetime.now(HORA_COLOMBIA).date() + timedelta(days=1)
+        fecha_hoy = fecha_manana - timedelta(days=1)
+        m, d = fecha_manana.month, fecha_manana.weekday()   # lunes = 0, igual que en el notebook
+        if clima and clima["disponible"]:
+            hoy, manana = clima["hoy"], clima["manana"]
+        elif clima:
+            hoy, manana = self.clima_mes[fecha_hoy.month], self.clima_mes[m]
+        else:
+            hoy, manana = None, None
+        filas = [fila_desde_lecturas(completo, previo, m, d, manana, hoy)]
 
         fuera = [cat.VARIABLES[v]["etiqueta"] for v, x in actual.items()
                  if x > self.stats[v]["max"]]
@@ -523,7 +528,7 @@ class ServicioML:
             return None
         if not clima["disponible"]:
             return {"disponible": False,
-                    "fuente": "Sin conexión con el pronóstico del clima: se usó el clima típico de cada mes."}
+                    "fuente": "Sin conexión con el pronóstico del clima: se usó el clima típico del mes."}
         m = clima["manana"]
         return {
             "disponible": True, "fecha": clima["fecha"], "fuente": "Pronóstico del clima de Open-Meteo",

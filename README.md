@@ -54,7 +54,7 @@ El modelo necesita el tiempo de **hoy** y de **mañana**. Al calcular un pronós
 - la temperatura, el viento, la humedad y las nubes se promedian.
 
 - **Consulta en caché:** la descarga se guarda una hora, así que la página no se vuelve lenta al mover los deslizadores.
-- **Sin internet:** la aplicación usa el **clima típico de cada mes**, calculado con `datos/meteorologia_diaria.csv`, y lo avisa en la tarjeta. Reintenta la descarga a los 10 minutos.
+- **Sin internet:** la aplicación usa el clima típico del mes (el de hoy para los rezagos y el de mañana para el día pronosticado), calculado con `datos/meteorologia_diaria.csv`, y lo avisa en la tarjeta. Reintenta la descarga a los 10 minutos.
 
 ## Estructura
 

@@ -16,10 +16,10 @@ Ejemplo que usaremos de principio a fin: el usuario agrega **PM2.5 = 24,5 µg/m�
                                         7. ServicioML.imputar() (7 variables ausentes)
                                         8. clima_hoy_y_manana() (pronóstico de Open-Meteo)
                                            fila_desde_lecturas() (9 lecturas + clima a 51 variables)
-                                        9. 84 escenarios de calendario (12 meses x 7 días)
-                                       10. modelo.predict() calcula el promedio
-                                       11. TreeSHAP calcula las contribuciones promedio
-                                       12. Agregación por variable, narrativa y semáforo
+                                        9. Fecha real de mañana (mes y día de la semana)
+                                        10. modelo.predict() calcula el pronóstico
+                                        11. TreeSHAP calcula las contribuciones
+                                        12. Agregación por variable, narrativa y semáforo
  13. pintarResultados() / pintarExplicacion() <------ JSON de respuesta
 ```
 
@@ -103,17 +103,17 @@ El modelo desplegado (escenario C de la tesis, LightGBM) no recibe «PM2.5», si
 
 Cuando falta la lectura anterior se asume **persistencia** (el valor de ayer es igual al de hoy): es el supuesto más neutral, coherente con la alta autocorrelación de la serie (ACF(1) = 0,64 para PM2.5), y produce `delta = 0`, es decir, «sin tendencia».
 
-Las 30 variables meteorológicas no las escribe el usuario. `clima_hoy_y_manana()` descarga de Open-Meteo el pronóstico horario de hoy y de mañana. `meteo.agregar_diario()` lo resume por día con las mismas reglas del notebook del EDA: la lluvia se suma y la temperatura, el viento, la humedad, las nubes, la presión y la capa límite se promedian. El tiempo de **mañana** entra como las 15 variables del día pronosticado y el de **hoy** como sus rezagos (`_lag1`). La descarga se guarda una hora en memoria. Si no hay internet, se usa el promedio histórico de cada mes calculado con `meteorologia_diaria.csv`, y la interfaz lo avisa.
+Las 30 variables meteorológicas no las escribe el usuario. `clima_hoy_y_manana()` descarga de Open-Meteo el pronóstico horario de hoy y de mañana. `meteo.agregar_diario()` lo resume por día con las mismas reglas del notebook del EDA: la lluvia se suma y la temperatura, el viento, la humedad, las nubes, la presión y la capa límite se promedian. El tiempo de **mañana** entra como las 15 variables del día pronosticado y el de **hoy** como sus rezagos (`_lag1`). La descarga se guarda una hora en memoria. Si no hay internet, se usa el promedio histórico del mes de hoy y del mes de mañana, calculado con meteorologia_diaria.csv, y la interfaz lo avisa.
 
-## 9. Sin fechas: los 84 escenarios de calendario
+## 9. La fecha: el día real de mañana
 
-El modelo también usa `mes` y `dia_semana`, pero el simulador es **agnóstico al tiempo**: el usuario no da fecha. En lugar de inventar una, el servicio evalúa la misma fila en las **12 × 7 = 84 combinaciones** de mes y día de la semana y promedia. El resultado se interpreta como «la calidad del aire esperada con estas condiciones, en una época cualquiera del año».
+El modelo también usa mes y dia_semana. Como la aplicación siempre pronostica el día de mañana, estas dos variables se toman de su fecha real: la que trae el pronóstico de Open-Meteo (hora de Bogotá) o, si no hay internet, la fecha de Colombia más un día. Así, la época del año entra al modelo con su valor real, y su aporte se ve en la fila «Época del año» de la tabla «¿Cómo se llega al pronóstico?».
 
 
 
 ## 10. Predicción
 
-Cada uno de los dos modelos (PM2.5 y PM10) predice las 84 filas y se toma el promedio. Los modelos son LightGBM en formato nativo (`modelo_pm2_5.txt` y `modelo_pm10.txt`, exportados desde Colab). Los nombres y el orden de columnas se leen **del propio modelo** (`feature_name()`), y `nombre_canonico()` reconoce también las variables meteorológicas. El servicio comprueba que las columnas sean exactamente las 51 del escenario C; con los modelos reales, la aplicación reproduce las métricas de prueba del notebook (MAE 2,4045 y 2,4856).
+Cada uno de los dos modelos (PM2.5 y PM10) predice la fila del día de mañana. Los modelos son LightGBM en formato nativo (`modelo_pm2_5.txt` y `modelo_pm10.txt`, exportados desde Colab). Los nombres y el orden de columnas se leen **del propio modelo** (`feature_name()`), y `nombre_canonico()` reconoce también las variables meteorológicas. El servicio comprueba que las columnas sean exactamente las 51 del escenario C; con los modelos reales, la aplicación reproduce las métricas de prueba del notebook (MAE 2,4045 y 2,4856).
 
 ## 11. SHAP: cuánto empujó cada variable
 
@@ -123,9 +123,7 @@ Para cada fila, TreeSHAP calcula un valor φᵢ por variable, que cumple la **pr
 
 donde el valor base es la predicción media del modelo sobre los datos de entrenamiento («un día típico», ≈ 13,2 µg/m³ para PM2.5).
 
-Como la predicción final es el promedio de 84 filas, se promedian también sus explicaciones. La aditividad se conserva porque el promedio de sumas es la suma de promedios:
-
-> promedio(pred) = base + promedio(φ₁) + … + promedio(φ₅₁)
+Como se predice una sola fila, el valor base más las 51 contribuciones da exactamente el pronóstico que ve el usuario.
 
 La propiedad aditiva permite resumir las contribuciones de las variables derivadas en factores que el usuario reconoce. La interfaz presenta únicamente esa explicación resumida.
 
@@ -185,7 +183,7 @@ En la interfaz, el gráfico SVG permite inspeccionar con el puntero la fecha y l
 |---|---|---|
 | Imputación iterativa con datos de entrenamiento | Coherencia entre variables correlacionadas | Las variables completadas se identifican como estimadas |
 | Persistencia cuando falta la lectura anterior | Supuesto neutral, alta autocorrelación | Se usa internamente para construir variables derivadas |
-| Promedio sobre 84 combinaciones de calendario | El simulador no usa fechas | Barra «Calendario (promedio de todo el año)» |
+| Mes y día de la semana de la fecha real de mañana | La app siempre pronostica el día siguiente y la época del año pesa en el modelo | Fila «Época del año» en la tabla «¿Cómo se llega al pronóstico?» |
 | Semáforo = peor entre pronóstico y lectura actual | Los árboles no extrapolan | Frase de motivo explícita + aviso de valores fuera de rango |
 | Agregación de las 51 variables en 9 + 7 factores de clima + calendario | Comprensión para no expertos | La interfaz presenta solo los factores reconocibles por el usuario |
 | ma3 = media(t−1,t−2,t−3), delta = (t−1)−(t−2) | Mismas definiciones del notebook del Capítulo 2 | Confirmado: se reproducen las 1.294 filas |
