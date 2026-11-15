@@ -1,0 +1,31 @@
+# Aire Claro: la app (Django + Gunicorn) y Nginx delante.
+# Arrancar:   docker compose up -d --build
+# Detener:    docker compose down
+name: aire_claro
+services:
+  app:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - estaticos:/app/staticfiles
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:-_}
+    volumes:
+      - ./deploy/nginx/${NGINX_MODO:-http}.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - estaticos:/app/staticfiles:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+volumes:
+  estaticos:
