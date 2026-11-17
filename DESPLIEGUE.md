@@ -63,6 +63,30 @@ nano .env
 
 Guardar con `Ctrl + O`, `Enter`, y salir con `Ctrl + X`.
 
+## Si el VPS ya tiene otro servidor web (servidor compartido)
+
+Antes de arrancar, revisar si los puertos 80 y 443 ya están ocupados:
+
+```bash
+docker ps
+```
+
+```bash
+sudo ss -tlnp | grep -E ':(80|443|8080|8443)'
+```
+
+Si otro proyecto ya usa 80 y 443 (por ejemplo un contenedor de Caddy o Nginx), **no lo detenga**: se caerían sus páginas. En su lugar, agregue al `.env` puertos libres y el puerto en el origen:
+
+```
+PUERTO_HTTP=8080
+PUERTO_HTTPS=8443
+DJANGO_CSRF_TRUSTED_ORIGINS=http://IP_DEL_VPS:8080
+```
+
+La aplicación queda en `http://IP_DEL_VPS:8080/`, separada del otro proyecto (su propia red, sus propios contenedores). Si el firewall `ufw` está activo, abrir ese puerto con `ufw allow 8080`.
+
+Para publicarla con dominio y HTTPS en un servidor así, el servidor web existente debe reenviar el dominio a `IP_DEL_VPS:8080`. Eso se acuerda con quien administra ese servidor.
+
 ## 4. Arrancar
 
 ```bash
@@ -75,7 +99,7 @@ La primera vez tarda unos minutos porque descarga Python e instala las librería
 docker compose ps
 ```
 
-Los dos contenedores deben aparecer como `running`. Abrir `http://IP_DEL_VPS/` y hacer una predicción.
+Los dos contenedores deben aparecer como `running`. Abrir `http://IP_DEL_VPS/` (o `http://IP_DEL_VPS:8080/` si cambió el puerto) y hacer una predicción.
 
 ## 5. Firewall
 
@@ -150,6 +174,7 @@ Abrir <http://localhost/>.
 |---|---|
 | `Bad Request (400)` | La IP o el dominio no están en `DJANGO_ALLOWED_HOSTS` |
 | La predicción falla con error 403 | Falta el origen en `DJANGO_CSRF_TRUSTED_ORIGINS` (con `http://` o `https://`) |
+| `docker compose up` dice `port is already allocated` | Otro programa usa ese puerto: ver la sección del servidor compartido |
 | `502 Bad Gateway` | `app` no arrancó: revisar `docker compose logs app` |
 | `app` se reinicia sin parar y el registro dice `Defina DJANGO_SECRET_KEY` | Falta la clave en `.env` |
 | Nginx no arranca con `NGINX_MODO=https` | El certificado no existe para `DOMINIO`: revisar `ls /etc/letsencrypt/live/` |
